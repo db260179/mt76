@@ -9,14 +9,14 @@
 	.band = NL80211_BAND_2GHZ,		\
 	.center_freq = (_freq),			\
 	.hw_value = (_idx),			\
-	.max_power = 30,			\
+	.max_power = 20,			\
 }
 
 #define CHAN5G(_idx, _freq) {			\
 	.band = NL80211_BAND_5GHZ,		\
 	.center_freq = (_freq),			\
 	.hw_value = (_idx),			\
-	.max_power = 30,			\
+	.max_power = 20,			\
 }
 
 static const struct ieee80211_channel mt76_channels_2ghz[] = {
