@@ -941,7 +941,7 @@ void mt76_set_channel(struct mt76_phy *phy)
 	if (!offchannel)
 		phy->main_chan = chandef->chan;
 
-	if (chandef->chan != phy->main_chan)
+	if (chandef->chan != phy->main_chan || was_scanning)
 		memset(phy->chan_state, 0, sizeof(*phy->chan_state));
 }
 EXPORT_SYMBOL_GPL(mt76_set_channel);
