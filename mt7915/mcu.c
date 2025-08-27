@@ -210,9 +210,6 @@ mt7915_mcu_set_timeout(struct mt76_dev *mdev, int cmd)
 	case MCU_EXT_CMD_BSS_INFO_UPDATE:
 		mdev->mcu.timeout = 2 * HZ;
 		return;
-	case MCU_EXT_CMD_EFUSE_BUFFER_MODE:
-		mdev->mcu.timeout = 10 * HZ;
-		return;
 	default:
 		break;
 	}
