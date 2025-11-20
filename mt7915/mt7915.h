@@ -23,7 +23,7 @@
 #define MT7915_TX_MCU_RING_SIZE		256
 #define MT7915_TX_FWDL_RING_SIZE	128
 
-#define MT7915_RX_RING_SIZE		1024 /* Reduce from 1536 */
+#define MT7915_RX_RING_SIZE		1536
 #define MT7915_RX_MCU_RING_SIZE		512
 
 #define MT7915_FIRMWARE_WA		"mediatek/mt7915_wa.bin"
