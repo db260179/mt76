@@ -19,11 +19,11 @@
 #define MT7915_WATCHDOG_TIME		(HZ / 10)
 #define MT7915_RESET_TIMEOUT		(30 * HZ)
 
-#define MT7915_TX_RING_SIZE		2048
+#define MT7915_TX_RING_SIZE		1536 /* Reduce from 2048 */
 #define MT7915_TX_MCU_RING_SIZE		256
 #define MT7915_TX_FWDL_RING_SIZE	128
 
-#define MT7915_RX_RING_SIZE		1536
+#define MT7915_RX_RING_SIZE		2048  /* Increase from 1536 */
 #define MT7915_RX_MCU_RING_SIZE		512
 
 #define MT7915_FIRMWARE_WA		"mediatek/mt7915_wa.bin"
