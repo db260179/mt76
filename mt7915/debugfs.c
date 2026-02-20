@@ -1326,6 +1326,51 @@ mt7915_rf_regval_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_rf_regval, mt7915_rf_regval_get,
 			 mt7915_rf_regval_set, "0x%08llx\n");
 
+#ifdef CONFIG_MTK_VENDOR
+static ssize_t
+mt7915_get_csi_stats(struct file *file, char __user *user_buf,
+		size_t count, loff_t *ppos)
+
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct csi_mac_filter *current_mac, *tmp_mac;
+	static const size_t sz = 4096;
+	char *buf;
+	u32 reg, len = 0;
+	int ret;
+
+	buf = kzalloc(sz, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	len += scnprintf(buf + len, sz - len, "CSI enable: %d\n", phy->csi.enable);
+
+	if (phy->csi.enable) {
+		len += scnprintf(buf + len, sz - len, "CSI data_cnt: %d\n", phy->csi.count);
+
+		mutex_lock(&phy->csi.mac_filter_lock);
+
+		list_for_each_entry_safe(current_mac, tmp_mac, &phy->csi.mac_filter_list, node) {
+			len += scnprintf(buf + len, sz - len, "mac: %pM, interval: %d\n", current_mac->mac, current_mac->interval);
+		}
+
+		mutex_unlock(&phy->csi.mac_filter_lock);
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+out:
+	kfree(buf);
+	return ret;
+}
+
+static const struct file_operations mt7915_csi_ops = {
+	.read = mt7915_get_csi_stats,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+#endif
+
 int mt7915_init_debugfs(struct mt7915_phy *phy)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -1370,6 +1415,9 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rdd_monitor", dir,
 					    mt7915_rdd_monitor);
 	}
+#ifdef CONFIG_MTK_VENDOR
+	debugfs_create_file("csi_stats", 0400, dir, phy, &mt7915_csi_ops);
+#endif
 
 	if (!ext_phy)
 		dev->debugfs_dir = dir;
