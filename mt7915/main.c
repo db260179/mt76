@@ -205,47 +205,37 @@ static void mt7915_init_bitrate_mask(struct ieee80211_vif *vif)
 	}
 }
 
-static int mt7915_add_interface(struct ieee80211_hw *hw,
-				struct ieee80211_vif *vif)
+int mt7915_init_vif(struct mt7915_phy *phy, struct ieee80211_vif *vif, bool bf_en)
 {
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
-	struct mt7915_dev *dev = mt7915_hw_dev(hw);
-	struct mt7915_phy *phy = mt7915_hw_phy(hw);
+	struct mt7915_dev *dev = phy->dev;
 	struct mt76_txq *mtxq;
 	bool ext_phy = phy != &dev->phy;
 	int idx, i, ret = 0;
 
-	mutex_lock(&dev->mt76.mutex);
-
-	mt76_testmode_reset(phy->mt76, true);
-
-	if (vif->type == NL80211_IFTYPE_MONITOR &&
-	    is_zero_ether_addr(vif->addr))
-		phy->monitor_vif = vif;
+	/* To differentiate the mac address of TXD and TXCMD interface */
+	vif->addr[0] |= bf_en;
 
 	mvif->mt76.idx = __ffs64(~dev->mt76.vif_mask);
-	if (mvif->mt76.idx >= (MT7915_MAX_INTERFACES << dev->dbdc_support)) {
-		ret = -ENOSPC;
-		goto out;
-	}
+	if (mvif->mt76.idx >= (MT7915_MAX_INTERFACES << dev->dbdc_support))
+		return -ENOSPC;
 
 	idx = get_omac_idx(vif->type, phy->omac_mask);
-	if (idx < 0) {
-		ret = -ENOSPC;
-		goto out;
-	}
+	if (idx < 0)
+		return -ENOSPC;
+
 	mvif->mt76.omac_idx = idx;
 	mvif->phy = phy;
 	mvif->mt76.band_idx = phy->mt76->band_idx;
-	mvif->mt76.wcid = &mvif->sta.wcid;
 
-	mvif->mt76.wmm_idx = (vif->type != NL80211_IFTYPE_AP && vif->type != NL80211_IFTYPE_MONITOR);
+	mvif->mt76.wmm_idx = (vif->type != NL80211_IFTYPE_AP &&
+			      vif->type != NL80211_IFTYPE_MONITOR) || bf_en;
 	if (ext_phy)
 		mvif->mt76.wmm_idx += 2;
 
 	ret = mt7915_mcu_add_dev_info(phy, vif, true);
 	if (ret)
-		goto out;
+		return ret;
 
 	dev->mt76.vif_mask |= BIT_ULL(mvif->mt76.idx);
 	phy->omac_mask |= BIT_ULL(mvif->mt76.omac_idx);
@@ -253,7 +243,6 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, mt7915_wtbl_size(dev));
 	if (idx < 0) {
 		ret = -ENOSPC;
-		goto out;
 	}
 
 	INIT_LIST_HEAD(&mvif->sta.rc_list);
@@ -298,7 +287,26 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	mt7915_mcu_add_sta(dev, vif, NULL, CONN_STATE_PORT_SECURE, true);
 	rcu_assign_pointer(dev->mt76.wcid[idx], &mvif->sta.wcid);
 
-out:
+	return ret;
+}
+
+static int mt7915_add_interface(struct ieee80211_hw *hw,
+				struct ieee80211_vif *vif)
+{
+	struct mt7915_dev *dev = mt7915_hw_dev(hw);
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
+	int ret = 0;
+
+	mutex_lock(&dev->mt76.mutex);
+
+	mt76_testmode_reset(phy->mt76, true);
+
+	if (vif->type == NL80211_IFTYPE_MONITOR &&
+	    is_zero_ether_addr(vif->addr))
+		phy->monitor_vif = vif;
+
+	ret = mt7915_init_vif(phy, vif, false);
+
 	mutex_unlock(&dev->mt76.mutex);
 
 	return ret;

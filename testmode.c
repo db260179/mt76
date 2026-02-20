@@ -196,6 +196,7 @@ mt76_testmode_alloc_skb(struct mt76_phy *phy, u32 len,
 
 	hdr = __skb_put_zero(head, sizeof(*hdr));
 	hdr->frame_control = cpu_to_le16(fc);
+
 	memcpy(hdr->addr1, addr[0], ETH_ALEN);
 	memcpy(hdr->addr2, addr[1], ETH_ALEN);
 	memcpy(hdr->addr3, addr[2], ETH_ALEN);

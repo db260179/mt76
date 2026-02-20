@@ -61,6 +61,7 @@ enum offs_rev {
 	MDP_BNRCFR1,
 	ARB_DRNGR0,
 	ARB_SCR,
+	ARB_TQSAXM0,
 	RMAC_MIB_AIRTIME14,
 	AGG_AALCR0,
 	AGG_AWSCR0,
@@ -540,6 +541,9 @@ enum offs_rev {
 
 #define MT_ARB_DRNGR0(_band, _n)	MT_WF_ARB(_band, (__OFFS(ARB_DRNGR0) +	\
 							  (_n) * 4))
+
+#define MT_ARB_TQSAXM0(_band)		MT_WF_ARB(_band, __OFFS(ARB_TQSAXM0))
+#define MT_ARB_TQSAXM_ALTX_START_MASK	GENMASK(12, 8)
 
 /* RMAC: band 0(0x820e5000), band 1(0x820f5000) */
 #define MT_WF_RMAC_BASE(_band)		((_band) ? 0x820f5000 : 0x820e5000)

@@ -2888,6 +2888,36 @@ mt7915_txpower_level_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_txpower_level, NULL,
 			 mt7915_txpower_level_set, "%lld\n");
 
+static int
+mt7915_txbf_pfmu_tag_read(void *data, u64 val)
+{
+	struct mt7915_phy *phy = data;
+	u8 pfmu_idx = (u8)val;
+
+	pr_info("%s: %d pfmu_tag cmd sent out ---\n", __func__, __LINE__);
+	mt7915_mcu_txbf_profile_tag_read(phy, pfmu_idx, true);
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_txbf_pfmu_tag_idx, NULL,
+			 mt7915_txbf_pfmu_tag_read, "%llx\n");
+
+static int
+mt7915_txbf_sta_rec_read(void *data, u64 val)
+{
+	struct mt7915_dev *dev = data;
+	u16 wlan_idx = (u16)val;
+
+	pr_info("%s: %d sta_rec cmd sent out ---\n", __func__, __LINE__);
+	mt7915_mcu_txbf_sta_rec_read(dev, wlan_idx);
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_txbf_sta_rec, NULL,
+			 mt7915_txbf_sta_rec_read, "%llx\n");
+
 /* usage: echo 0x[arg3][arg2][arg1] > fw_wa_set */
 static int
 mt7915_wa_set(void *data, u64 val)
@@ -3776,6 +3806,11 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_file("txpower_level", 0400, dir, dev,
 			    &fops_txpower_level);
+
+	debugfs_create_file("pfmu_tag_read", 0600, dir, phy,
+			    &fops_txbf_pfmu_tag_idx);
+	debugfs_create_file("bf_starec_read", 0600, dir, dev,
+			    &fops_txbf_sta_rec);
 
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 
