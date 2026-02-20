@@ -1031,10 +1031,16 @@ mt7915_rate_txpower_get(struct file *file, char __user *user_buf,
 {
 	struct mt7915_phy *phy = file->private_data;
 	struct mt7915_dev *dev = phy->dev;
+	struct ieee80211_channel *chan = phy->mt76->chandef.chan;
+	struct ieee80211_supported_band sband;
 	s8 txpwr[MT7915_SKU_RATE_NUM];
-	static const size_t sz = 2048;
+	static const size_t sz = 4096;
 	u8 band = phy->mt76->band_idx;
 	int i, offs = 0, len = 0;
+	u32 target_power = 0;
+	int n_chains = hweight16(phy->mt76->chainmask);
+	int nss_delta = mt76_tx_power_path_delta(n_chains);
+	int pwr_delta;
 	ssize_t ret;
 	char *buf;
 	u32 reg;
@@ -1093,11 +1099,38 @@ mt7915_rate_txpower_get(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, sz - len, "BW160/");
 	mt7915_txpower_puts(HE_RU2x996, 17);
 
-	reg = is_mt7915(&dev->mt76) ? MT_WF_PHY_TPC_CTRL_STAT(band) :
-	      MT_WF_PHY_TPC_CTRL_STAT_MT7916(band);
+	reg = is_mt7915(&dev->mt76) ? MT_WF_IRPI_TPC_CTRL_STAT(band) :
+	      MT_WF_IRPI_TPC_CTRL_STAT_MT7916(band);
 
-	len += scnprintf(buf + len, sz - len, "\nTx power (bbp)  : %6ld\n",
-			 mt76_get_field(dev, reg, MT_WF_PHY_TPC_POWER));
+	len += scnprintf(buf + len, sz - len, "\nTx power (bbp)  : %6ld [0.5 dBm]\n",
+			 mt76_get_field(dev, reg, MT_WF_IRPI_TPC_POWER));
+
+	len += scnprintf(buf + len, sz - len, "RegDB maximum power:\t%d [dBm]\n",
+			 chan->max_reg_power);
+
+	if (chan->band == NL80211_BAND_2GHZ)
+		sband = phy->mt76->sband_2g.sband;
+	else if (chan->band == NL80211_BAND_5GHZ)
+		sband = phy->mt76->sband_5g.sband;
+	else if (chan->band == NL80211_BAND_6GHZ)
+		sband = phy->mt76->sband_6g.sband;
+
+	pwr_delta = mt7915_eeprom_get_power_delta(dev, sband.band);
+
+	for (i = 0; i < n_chains; i++) {
+		u32 val;
+
+		val = mt7915_eeprom_get_target_power(dev, chan, i);
+		target_power = max(target_power, val);
+	}
+
+	target_power += pwr_delta + nss_delta;
+	target_power = DIV_ROUND_UP(target_power, 2);
+	len += scnprintf(buf + len, sz - len, "eeprom maximum power:\t%d [dBm]\n",
+			 target_power);
+
+	len += scnprintf(buf + len, sz - len, "nss_delta:\t%d [0.5 dBm]\n",
+			 nss_delta);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
@@ -1275,6 +1308,8 @@ static int
 mt7915_txpower_info_show(struct seq_file *file, void *data)
 {
 	struct mt7915_phy *phy = file->private;
+	struct mt76_phy *mphy = phy->mt76;
+	struct mt76_dev *dev = mphy->dev;
 	struct {
 		u8 category;
 		u8 rsv1;
@@ -1316,6 +1351,7 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 		s8 mu_tx_power_manual;
 		u8 rsv3;
 	} __packed basic_info = {};
+	struct device_node *np;
 	int ret;
 
 	ret = mt7915_mcu_get_txpower_sku(phy, (s8 *)&basic_info, sizeof(basic_info),
@@ -1349,6 +1385,9 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 		   basic_info.thermal_compensate_enable ? "enable" : "disable");
 	seq_printf(file, "    Theraml Compensation Value: %d\n",
 		   basic_info.thermal_compensate_value);
+
+	np = mt76_find_power_limits_node(dev);
+	seq_printf(file, "    RegDB:  %s\n", !np ? "enable" : "disable");
 
 out:
 	return ret;
