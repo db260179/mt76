@@ -585,10 +585,10 @@ mt7915_mac_fill_rx_vector(struct mt7915_dev *dev, struct sk_buff *skb)
 		if (i == 3)
 			wb_rssi = le32_to_cpu(rxv[9]);
 
-		phy->test.last_rcpi[i] = rcpi & 0xff;
-		phy->test.last_rssi[i] = to_rssi(GENMASK(7, 0), rcpi);
-		phy->test.last_ib_rssi[i] = ib_rssi & 0xff;
-		phy->test.last_wb_rssi[i] = wb_rssi & 0xff;
+		phy->mt76->test.last_rx.rcpi[i] = rcpi & 0xff;
+		phy->mt76->test.last_rx.rssi[i] = to_rssi(GENMASK(7, 0), rcpi);
+		phy->mt76->test.last_rx.ib_rssi[i] = ib_rssi & 0xff;
+		phy->mt76->test.last_rx.wb_rssi[i] = wb_rssi & 0xff;
 	}
 
 	v20 = le32_to_cpu(rxv[20]);
@@ -599,8 +599,8 @@ mt7915_mac_fill_rx_vector(struct mt7915_dev *dev, struct sk_buff *skb)
 
 	snr = FIELD_GET(MT_CRXV_SNR, v20) - 16;
 
-	phy->test.last_freq_offset = foe;
-	phy->test.last_snr = snr;
+	phy->mt76->test.last_rx.freq_offset = foe;
+	phy->mt76->test.last_rx.snr = snr;
 out:
 #endif
 	dev_kfree_skb(skb);
