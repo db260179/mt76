@@ -8,6 +8,10 @@
 #include "mt7915.h"
 #include "mcu.h"
 
+static bool sw_aci_enable = false;
+module_param(sw_aci_enable, bool, 0644);
+MODULE_PARM_DESC(sw_aci_enable, "Enable the feature of Adjacent Channel Interference Detection");
+
 static bool mt7915_dev_running(struct mt7915_dev *dev)
 {
 	struct mt7915_phy *phy;
@@ -41,6 +45,10 @@ int mt7915_run(struct ieee80211_hw *hw)
 			goto out;
 
 		mt7915_mac_enable_nf(dev, dev->phy.mt76->band_idx);
+
+		ret = mt7915_mcu_sw_aci_set(dev, sw_aci_enable);
+		if (ret)
+			goto out;
 	}
 
 	if (phy != &dev->phy) {

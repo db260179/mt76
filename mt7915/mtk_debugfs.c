@@ -3773,16 +3773,12 @@ static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
 static int
 mt7915_sw_aci_set(void *data, u64 val)
 {
-#define SWLNA_ENABLE 6
 	struct mt7915_dev *dev = data;
-	struct {
-		u32 subcmd;
-		u8 enable;
-	} req = {
-		.subcmd = SWLNA_ENABLE,
-		.enable = (u8) val,
-	};
-	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SWLNA_ACI_CTRL), &req, sizeof(req), NULL);
+
+	if (val > 1)
+		return -EINVAL;
+
+	return mt7915_mcu_sw_aci_set(dev, !!val);
 }
 
 
