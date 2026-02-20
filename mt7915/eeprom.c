@@ -589,7 +589,7 @@ mt7915_eeprom_has_background_radar(struct mt7915_dev *dev)
 		return true;
 	case 0x7906:
 		/* read efuse to check background radar capability */
-		if (mt7915_mcu_get_eeprom(dev, offs, buf))
+		if (mt7915_mcu_get_eeprom(dev, buf, offs))
 			break;
 
 		val = buf[offs % MT7915_EEPROM_BLOCK_SIZE];
