@@ -203,17 +203,14 @@ static void print_array(const struct tm_field *field, struct nlattr *attr)
 
 static void print_nested(const struct tm_field *field, struct nlattr *attr)
 {
-	struct nlattr **tb = alloca(field->len * sizeof(struct nlattr *));
 	const struct tm_field *fields = field->fields;
-	int i;
+	struct nlattr *cur;
+	int i, rem;
 
-	nla_parse_nested(tb, field->len - 1, attr, field->policy);
-	for (i = 0; i < field->len; i++) {
+	nla_for_each_nested(cur, attr, rem) {
 		int prefix_len = 0;
 
-		if (!tb[i])
-			continue;
-
+		i = nla_type(cur);
 		if (!fields[i].print)
 			continue;
 
@@ -226,7 +223,7 @@ static void print_nested(const struct tm_field *field, struct nlattr *attr)
 				sizeof(prefix) - prefix_len - 1);
 		}
 
-		fields[i].print(&fields[i], tb[i]);
+		fields[i].print(&fields[i], cur);
 		if (fields[i].prefix)
 			prefix[prefix_len] = 0;
 
@@ -234,20 +231,25 @@ static void print_nested(const struct tm_field *field, struct nlattr *attr)
 			printf("\n");
 	}
 
-	if (field->print_extra)
+	if (field->print_extra) {
+		struct nlattr **tb = alloca(field->len * sizeof(struct nlattr *));
+
+		nla_parse_nested(tb, field->len - 1, attr, field->policy);
 		field->print_extra(field, tb);
+	}
 }
 
 static void print_extra_stats(const struct tm_field *field, struct nlattr **tb)
 {
-	float total, failed;
+	float total, success, failed;
 
 	if (!tb[MT76_TM_STATS_ATTR_RX_PACKETS] ||
-	    !tb[MT76_TM_STATS_ATTR_RX_FCS_ERROR])
+	    !tb[MT76_TM_STATS_ATTR_RX_SUCCESS])
 		return;
 
 	total = nla_get_u64(tb[MT76_TM_STATS_ATTR_RX_PACKETS]);
-	failed = nla_get_u64(tb[MT76_TM_STATS_ATTR_RX_FCS_ERROR]);
+	success = nla_get_u64(tb[MT76_TM_STATS_ATTR_RX_SUCCESS]);
+	failed = total - success;
 
 	printf("%srx_per=%.02f%%\n", prefix, 100 * failed / total);
 }
@@ -391,6 +393,8 @@ static const struct tm_field stats_fields[NUM_MT76_TM_STATS_ATTRS] = {
 	FIELD_RO(u32, TX_DONE, "tx_done"),
 	FIELD_RO(u64, RX_PACKETS, "rx_packets"),
 	FIELD_RO(u64, RX_FCS_ERROR, "rx_fcs_error"),
+	FIELD_RO(u64, RX_LEN_MISMATCH, "rx_len_mismatch"),
+	FIELD_RO(u64, RX_SUCCESS, "rx_success"),
 	FIELD_NESTED_RO(LAST_RX, rx, "last_"),
 };
 static struct nla_policy stats_policy[NUM_MT76_TM_STATS_ATTRS] = {
@@ -399,6 +403,8 @@ static struct nla_policy stats_policy[NUM_MT76_TM_STATS_ATTRS] = {
 	[MT76_TM_STATS_ATTR_TX_DONE] = { .type = NLA_U32 },
 	[MT76_TM_STATS_ATTR_RX_PACKETS] = { .type = NLA_U64 },
 	[MT76_TM_STATS_ATTR_RX_FCS_ERROR] = { .type = NLA_U64 },
+	[MT76_TM_STATS_ATTR_RX_LEN_MISMATCH] = { .type = NLA_U64 },
+	[MT76_TM_STATS_ATTR_RX_SUCCESS] = { .type = NLA_U64 },
 };
 #undef FIELD_NAME
 

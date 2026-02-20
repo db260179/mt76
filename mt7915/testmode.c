@@ -1966,9 +1966,10 @@ mt7915_tm_get_rx_stats(struct mt7915_phy *phy, bool clear)
 	if (!clear) {
 		enum mt76_rxq_id q = req.band ? MT_RXQ_BAND1 : MT_RXQ_MAIN;
 
-		td->rx_stats.packets[q] += le32_to_cpu(rs_band->mdrdy_cnt);
-		td->rx_stats.fcs_error[q] += le16_to_cpu(rs_band->fcs_err);
-		td->rx_stats.len_mismatch += le16_to_cpu(rs_band->len_mismatch);
+		td->rx_stats[q].packets += le32_to_cpu(rs_band->mdrdy_cnt);
+		td->rx_stats[q].rx_success += le16_to_cpu(rs_band->fcs_succ);
+		td->rx_stats[q].fcs_error += le16_to_cpu(rs_band->fcs_err);
+		td->rx_stats[q].len_mismatch += le16_to_cpu(rs_band->len_mismatch);
 	}
 
 	dev_kfree_skb(skb);
@@ -2560,62 +2561,18 @@ mt7915_tm_set_params(struct mt76_phy *mphy, struct nlattr **tb,
 static int
 mt7915_tm_dump_stats(struct mt76_phy *mphy, struct sk_buff *msg)
 {
+	struct mt76_testmode_data *td = &mphy->test;
 	struct mt7915_phy *phy = mphy->priv;
 	struct mt7915_dev *dev = phy->dev;
-	void *rx, *rssi;
-	int i;
+	int band_idx = mphy->band_idx;
 
-	rx = nla_nest_start(msg, MT76_TM_STATS_ATTR_LAST_RX);
-	if (!rx)
-		return -ENOMEM;
-
-	if (nla_put_s32(msg, MT76_TM_RX_ATTR_FREQ_OFFSET, phy->test.last_freq_offset))
-		return -ENOMEM;
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RCPI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_rcpi); i++)
-		if (nla_put_u8(msg, i, phy->test.last_rcpi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_IB_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_ib_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_ib_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_WB_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_wb_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_wb_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	if (nla_put_u8(msg, MT76_TM_RX_ATTR_SNR, phy->test.last_snr))
-		return -ENOMEM;
-
-	nla_nest_end(msg, rx);
+	if (!td->last_rx.path) {
+		td->last_rx.path = hweight32(mphy->chainmask >> (dev->chainshift * band_idx));
+		td->last_rx.rcpi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.ib_rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.wb_rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+	}
 
 	if (mphy->test.tx_rate_mode == MT76_TM_TX_MODE_HE_MU)
 		mphy->test.tx_done += mt76_rr(dev, MT_MIB_DR8(phy != &dev->phy));
