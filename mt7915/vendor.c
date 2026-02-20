@@ -47,6 +47,8 @@ static const struct nla_policy
 mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 	[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] = {.type = NLA_U8 },
 	[MTK_VENDOR_ATTR_MU_CTRL_DUMP] = {.type = NLA_U8 },
+	[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_MODE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_VAL] { .type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1189,9 +1191,10 @@ static int mt7915_vendor_mu_ctrl(struct wiphy *wiphy,
 				  int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
 	int err;
-	u8 val8;
+	u8 val8, mode;
 	u32 val32 = 0;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
@@ -1205,6 +1208,16 @@ static int mt7915_vendor_mu_ctrl(struct wiphy *wiphy,
 			 FIELD_PREP(RATE_CFG_VAL, val8);
 		ieee80211_iterate_active_interfaces_atomic(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
 			mt7915_set_wireless_vif, &val32);
+	} else if (tb[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_MODE]) {
+		mode = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_MODE]);
+
+		if (!tb[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_VAL])
+			return -EINVAL;
+
+		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_OFDMA_VAL]);
+		err = mt7915_set_muru_cfg(phy, mode, val8);
+		if (err)
+			return err;
 	}
 
 	return 0;
