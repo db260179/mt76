@@ -1017,7 +1017,7 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 			continue;
 		}
 
-		if (drop)
+		if (drop || (len == 0))
 			goto free_frag;
 
 		if (q->rx_head)
