@@ -1218,6 +1218,8 @@ enum offs_rev {
 #define MT_WF_IRPI_NSS(phy, nss)	MT_WF_IRPI(0x6000 + ((phy) << 20) + ((nss) << 16))
 #define MT_WF_IRPI_NSS_MT7916(phy, nss)	MT_WF_IRPI(0x1000 + ((phy) << 20) + ((nss) << 16))
 
+#define MT_WF_IPI_RESET			0x831a3008
+
 /* PHY */
 #define MT_WF_PHY_BASE			0x83080000
 #define MT_WF_PHY(ofs)			(MT_WF_PHY_BASE + (ofs))

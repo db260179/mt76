@@ -64,6 +64,20 @@
  *	(nested, u8 attrs)
  *
  * @MT76_TM_ATTR_CFG: config testmode rf feature (nested, see &mt76_testmode_cfg)
+ * @MT76_TM_ATTR_TXBF_ACT: txbf setting actions (u8)
+ * @MT76_TM_ATTR_TXBF_PARAM: txbf parameters (nested)
+ *
+ * @MT76_TM_ATTR_OFF_CH_SCAN_CH: config the channel of background chain (ZWDFS) (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH: config the center channel of background chain (ZWDFS) (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_BW: config the bandwidth of background chain (ZWDFS) (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_PATH: config the tx path of background chain (ZWDFS) (u8)
+ *
+ * @MT76_TM_ATTR_IPI_THRESHOLD: config the IPI index you want to read (u8)
+ * @MT76_TM_ATTR_IPI_PERIOD: config the time period for reading
+ *			     the histogram of specific IPI index (u8)
+ * @MT76_TM_ATTR_IPI_ANTENNA_INDEX: config the antenna index for reading
+ *				    the histogram of specific IPI index (u8)
+ * @MT76_TM_ATTR_IPI_RESET: Reset the IPI counter
  *
  */
 enum mt76_testmode_attr {
@@ -117,6 +131,16 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_CFG,
 	MT76_TM_ATTR_TXBF_ACT,
 	MT76_TM_ATTR_TXBF_PARAM,
+
+	MT76_TM_ATTR_OFF_CH_SCAN_CH,
+	MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH,
+	MT76_TM_ATTR_OFF_CH_SCAN_BW,
+	MT76_TM_ATTR_OFF_CH_SCAN_PATH,
+
+	MT76_TM_ATTR_IPI_THRESHOLD,
+	MT76_TM_ATTR_IPI_PERIOD,
+	MT76_TM_ATTR_IPI_ANTENNA_INDEX,
+	MT76_TM_ATTR_IPI_RESET,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -292,6 +316,27 @@ enum mt76_testmode_txbf_act {
 	/* keep last */
 	NUM_MT76_TM_TXBF_ACT,
 	MT76_TM_TXBF_ACT_MAX = NUM_MT76_TM_TXBF_ACT - 1,
+};
+
+/**
+ * enum mt76_testmode_ipi_antenna - specify antenna index for ipi count
+ *
+ * @MT76_TM_IPI_ANTENNA_0: use antenna 0
+ * @MT76_TM_IPI_ANTENNA_1: use antenna 1
+ * @MT76_TM_IPI_ANTENNA_2: use antenna 2
+ * @MT76_TM_IPI_ANTENNA_3: use antenna 3
+ * @MT76_TM_IPI_ANTENNA_ALL: use all antenna
+ */
+enum mt76_testmode_ipi_antenna {
+	MT76_TM_IPI_ANTENNA_0,
+	MT76_TM_IPI_ANTENNA_1,
+	MT76_TM_IPI_ANTENNA_2,
+	MT76_TM_IPI_ANTENNA_3,
+	MT76_TM_IPI_ANTENNA_ALL,
+
+	/* keep last */
+	NUM_MT76_TM_IPI_ANTENNA,
+	MT76_TM_IPI_ANTENNA_MAX = NUM_MT76_TM_IPI_ANTENNA - 1,
 };
 
 #endif

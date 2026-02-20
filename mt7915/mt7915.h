@@ -310,6 +310,7 @@ struct mt7915_phy {
 
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
+	struct delayed_work ipi_work;
 
 	bool sku_limit_en:1;
 	bool sku_path_en:1;
@@ -815,6 +816,9 @@ void mt7915_vendor_amnt_fill_rx(struct mt7915_phy *phy, struct sk_buff *skb);
 int mt7915_vendor_amnt_sta_remove(struct mt7915_phy *phy,
 				  struct ieee80211_sta *sta);
 #endif
+
+int mt7915_mcu_ipi_hist_ctrl(struct mt7915_phy *phy, void *data, u8 cmd, bool wait_resp);
+int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool wait_resp);
 
 #ifdef MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);
