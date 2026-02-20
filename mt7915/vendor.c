@@ -43,6 +43,11 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 };
 
 static const struct nla_policy
+three_wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
+	[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE] = {.type = NLA_U8 },
+};
+
+static const struct nla_policy
 rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
 	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_GI] = {.type = NLA_U8 },
 	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_LTF] = { .type = NLA_U8 },
@@ -1128,7 +1133,7 @@ static int mt7915_vendor_wireless_ctrl(struct wiphy *wiphy,
 			mt7915_set_wireless_vif, &val32);
 	} else if (tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT]) {
 		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT]);
-		mt7915_mcu_set_cert(phy, val8); /* Cert Enable for OMI */
+		mt7915_mcu_set_cfg(phy, CFGINFO_CERT_CFG, val8); /* Cert Enable for OMI */
 		mt7915_mcu_set_bypass_smthint(phy, val8); /* Cert bypass smooth interpolation */
 	}
 
@@ -1272,6 +1277,7 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 	return 0;
 }
 
+
 static int
 mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 			     struct sk_buff *skb, const void *data, int data_len,
@@ -1314,6 +1320,31 @@ mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	return len;
 }
+
+static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
+				    struct wireless_dev *wdev,
+				    const void *data,
+				    int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
+	int err;
+	u8 three_wire_mode;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_3WIRE_CTRL_MAX, data, data_len,
+			three_wire_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE])
+		return -EINVAL;
+
+	three_wire_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE]);
+
+	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, three_wire_mode);
+}
+
 
 static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
@@ -1396,6 +1427,17 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.dumpit = mt7915_vendor_edcca_ctrl_dump,
 		.policy = edcca_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_EDCCA_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_3WIRE_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7915_vendor_3wire_ctrl,
+		.policy = three_wire_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_3WIRE_CTRL_MAX,
 	}
 };
 

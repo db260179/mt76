@@ -13,6 +13,7 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_MU_CTRL = 0xc5,
 	MTK_NL80211_VENDOR_SUBCMD_PHY_CAPA_CTRL = 0xc6,
 	MTK_NL80211_VENDOR_SUBCMD_EDCCA_CTRL = 0xc7,
+	MTK_NL80211_VENDOR_SUBCMD_3WIRE_CTRL = 0xc8
 };
 
 
@@ -32,6 +33,7 @@ enum mtk_vendor_attr_edcca_ctrl {
                 NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL - 1
 };
 
+
 enum mtk_vendor_attr_edcca_dump {
         MTK_VENDOR_ATTR_EDCCA_DUMP_UNSPEC = 0,
 
@@ -45,6 +47,18 @@ enum mtk_vendor_attr_edcca_dump {
         MTK_VENDOR_ATTR_EDCCA_DUMP_MAX =
                 NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP - 1
 };
+
+enum mtk_vendor_attr_3wire_ctrl {
+	MTK_VENDOR_ATTR_3WIRE_CTRL_UNSPEC,
+
+	MTK_VENDOR_ATTR_3WIRE_CTRL_MODE,
+
+	/* keep last */
+	NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL,
+	MTK_VENDOR_ATTR_3WIRE_CTRL_MAX =
+		NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL - 1
+};
+
 
 enum mtk_capi_control_changed {
 	CAPI_RFEATURE_CHANGED		= BIT(16),
