@@ -819,6 +819,7 @@ void mt7915_mcu_set_rfeature_starec(void *data, struct mt7915_dev *dev,
 		       struct ieee80211_vif *vif, struct ieee80211_sta *sta);
 int mt7915_mcu_set_rfeature_trig_type(struct mt7915_phy *phy, u8 enable, u8 trig_type);
 int mt7915_mcu_set_mu_dl_ack_policy(struct mt7915_phy *phy, u8 policy_num);
+int mt7915_mcu_set_mu_prot_frame_th(struct mt7915_phy *phy, u32 val);
 void mt7915_mcu_set_ppdu_tx_type(struct mt7915_phy *phy, u8 ppdu_type);
 void mt7915_mcu_set_nusers_ofdma(struct mt7915_phy *phy, u8 type, u8 ofdma_user_cnt);
 void mt7915_mcu_set_mimo(struct mt7915_phy *phy, u8 direction);
