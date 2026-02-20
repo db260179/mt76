@@ -46,6 +46,14 @@ static const char * const testmode_txbf_act[] = {
 	[MT76_TM_TXBF_ACT_E2P_UPDATE] = "e2p_update",
 };
 
+static const char * const testmode_offchan_bw[] = {
+	[NL80211_CHAN_WIDTH_20_NOHT] = "NOHT",
+	[NL80211_CHAN_WIDTH_20] = "20",
+	[NL80211_CHAN_WIDTH_40] = "40",
+	[NL80211_CHAN_WIDTH_80] = "80",
+	[NL80211_CHAN_WIDTH_160] = "160",
+};
+
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
 {
 	unsigned int i = nla_get_u8(attr);
@@ -414,6 +422,13 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, RU_IDX, "ru_idx"),
 	FIELD_ENUM(TXBF_ACT, "txbf_act", testmode_txbf_act),
 	FIELD_ARRAY(u16_hex, TXBF_PARAM, "txbf_param"),
+	FIELD(u8, OFF_CH_SCAN_CH, "offchan_ch"),
+	FIELD(u8, OFF_CH_SCAN_CENTER_CH, "offchan_center_ch"),
+	FIELD_ENUM(OFF_CH_SCAN_BW, "offchan_bw", testmode_offchan_bw),
+	FIELD(u8, IPI_THRESHOLD, "ipi_threshold"),
+	FIELD(u32, IPI_PERIOD, "ipi_period"),
+	FIELD(u8, IPI_ANTENNA_INDEX, "ipi_antenna_idx"),
+	FIELD(u8, IPI_RESET, "ipi_reset"),
 	FIELD_MAC(MAC_ADDRS, "mac_addrs"),
 	FIELD_NESTED_RO(STATS, stats, "",
 			.print_extra = print_extra_stats),
@@ -446,6 +461,13 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_RU_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_STATS] = { .type = NLA_NESTED },
 	[MT76_TM_ATTR_TXBF_ACT] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_OFF_CH_SCAN_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_OFF_CH_SCAN_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_THRESHOLD] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_IPI_ANTENNA_INDEX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
 };
 
 const struct tm_field msg_field = {

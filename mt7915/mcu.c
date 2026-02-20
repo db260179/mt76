@@ -2838,6 +2838,7 @@ mt7915_mcu_background_chain_ctrl(struct mt7915_phy *phy,
 		req.monitor_chan = chandef->chan->hw_value;
 		req.monitor_central_chan =
 			ieee80211_frequency_to_channel(chandef->center_freq1);
+		req.monitor_bw = mt76_connac_chan_bw(chandef);
 		req.band_idx = phy->mt76->band_idx;
 		req.scan_mode = 2;
 		break;
@@ -4965,3 +4966,68 @@ int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable)
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MEC_CTRL), &req, sizeof(req), true);
 }
 #endif
+
+int mt7915_mcu_ipi_hist_ctrl(struct mt7915_phy *phy, void *data, u8 cmd, bool wait_resp)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct sk_buff *skb;
+	int ret;
+	struct {
+		u8 ipi_hist_idx;
+		u8 band_idx;
+		u8 set_val;
+		u8 rsv;
+		int idle_power_th;
+		u32 idle_power_max_cnt;
+		u32 idle_power_duration;
+		u32 idle_power_cmd_type;
+	} __packed req = {
+		.ipi_hist_idx = cmd,
+		.band_idx = phy->mt76->band_idx,
+	};
+
+	if (!wait_resp)
+		return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(IPI_HIST_CTRL),
+					 &req, sizeof(req), true);
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_EXT_QUERY(IPI_HIST_CTRL),
+					&req, sizeof(req), wait_resp, &skb);
+
+	if (ret)
+		return ret;
+
+	memcpy(data, skb->data, sizeof(struct mt7915_mcu_rdd_ipi_ctrl));
+	dev_kfree_skb(skb);
+
+	return 0;
+}
+
+int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool wait_resp)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct sk_buff *skb;
+	int ret;
+	struct rdd_ipi_hist_scan {
+		u8 mode;
+		u8 pd_setting;
+		u8 band_idx;
+		u8 rsv;
+	} __packed req = {
+		.mode = mode,
+		.pd_setting = 1,
+		.band_idx = phy->mt76->band_idx,
+	};
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_EXT_CMD(IPI_HIST_SCAN),
+					&req, sizeof(req), wait_resp, &skb);
+	if (ret)
+		return ret;
+
+	if (!wait_resp)
+		return 0;
+
+	memcpy(data, skb->data, sizeof(struct mt7915_mcu_rdd_ipi_scan));
+	dev_kfree_skb(skb);
+
+	return 0;
+}

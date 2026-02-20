@@ -874,6 +874,15 @@ struct mt76_testmode_data {
 		u64 fcs_error[__MT_RXQ_MAX];
 		u64 len_mismatch;
 	} rx_stats;
+
+	u8 offchan_ch;
+	u8 offchan_center_ch;
+	u8 offchan_bw;
+
+	u8 ipi_threshold;
+	u32 ipi_period;
+	u8 ipi_antenna_idx;
+	u8 ipi_reset;
 };
 
 struct mt76_vif_link {
