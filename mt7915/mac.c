@@ -928,7 +928,7 @@ mt7915_mac_tx_free(struct mt7915_dev *dev, void *data, int len)
 	v3 = (FIELD_GET(MT_TX_FREE_VER, txd) == 0x4);
 
 	for (cur_info = tx_info; count < total; cur_info++) {
-		u32 msdu, info;
+		u32 msdu, info, max_token_size = MT7915_TOKEN_SIZE;
 		u8 i;
 
 		if (WARN_ON_ONCE((void *)cur_info >= end))
@@ -971,6 +971,12 @@ mt7915_mac_tx_free(struct mt7915_dev *dev, void *data, int len)
 			wcid->stats.tx_retries += tx_retries;
 			wcid->stats.tx_failed += tx_failed;
 		}
+
+		if (mtk_wed_device_active(&mdev->mmio.wed))
+			max_token_size = (is_mt7915(&dev->mt76) ?
+					  MT7915_WED_TOKEN_SIZE_V0 :
+					  MT7915_WED_TOKEN_SIZE) +
+					 MT7915_WED_SW_TOKEN_SIZE;
 
 		if (v3 && (info & MT_TX_FREE_MPDU_HEADER_V3))
 			continue;
