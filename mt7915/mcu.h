@@ -1146,4 +1146,8 @@ struct mt7915_mcu_edcca_info {
 };
 #endif
 
+enum {
+	SCS_SEND_DATA = 0,
+	SCS_ENABLE = 3,
+};
 #endif
