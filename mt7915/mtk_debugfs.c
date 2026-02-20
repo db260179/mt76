@@ -3832,6 +3832,22 @@ mt7915_scs_enable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_scs_enable, NULL,
 			 mt7915_scs_enable_set, "%lld\n");
 
+static int
+mt7915_thermal_recal_set(void *data, u64 val)
+{
+#define THERMAL_DEBUG_OPERATION_MANUAL_TRIGGER 2
+#define THERMAL_DEBUG_MODE_RECAL 1
+	struct mt7915_dev *dev = data;
+
+	if (val > THERMAL_DEBUG_OPERATION_MANUAL_TRIGGER)
+		return -EINVAL;
+
+	return mt7915_mcu_thermal_debug(dev, THERMAL_DEBUG_MODE_RECAL, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_thermal_recal, NULL,
+			 mt7915_thermal_recal_set, "%llu\n");
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -3926,6 +3942,8 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 				    mt7915_show_eeprom_mode);
 				    
 	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
+	debugfs_create_file("thermal_recal", 0200, dir, dev, &fops_thermal_recal);
+
 	return 0;
 }
 #endif

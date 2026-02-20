@@ -5256,3 +5256,18 @@ void mt7915_mcu_scs_sta_poll(struct work_struct *work)
 	if (scs_enable_flag)
 		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
 }
+
+int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action)
+{
+	struct {
+		u8 mode;
+		u8 action;
+		u8 rsv[2];
+	} req = {
+		.mode = mode,
+		.action = action,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(THERMAL_DEBUG), &req,
+				 sizeof(req), true);
+}
