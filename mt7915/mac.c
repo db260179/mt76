@@ -1958,6 +1958,13 @@ static void mt7915_mac_severe_check(struct mt7915_phy *phy)
 	phy->trb_ts = trb;
 }
 
+void mt7915_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en) {
+	if (en)
+		ieee80211_hw_set(hw, SUPPORTS_AMSDU_IN_AMPDU);
+	else
+		ieee80211_hw_clear(hw, SUPPORTS_AMSDU_IN_AMPDU);
+}
+
 #ifdef CONFIG_MTK_VENDOR
 void mt7915_capi_sta_rc_work(void *data, struct ieee80211_sta *sta)
 {
