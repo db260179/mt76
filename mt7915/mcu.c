@@ -525,6 +525,11 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_BCC_NOTIFY:
 		mt7915_mcu_rx_bcc_notify(dev, skb);
 		break;
+#ifdef CONFIG_NL80211_TESTMODE
+	case MCU_EXT_EVENT_BF_STATUS_READ:
+		mt7915_tm_txbf_status_read(dev, skb);
+		break;
+#endif
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7915_mcu_rx_bss_acq_pkt_cnt(dev, skb);
 		break;
@@ -559,6 +564,7 @@ void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	     rxd->ext_eid == MCU_EXT_EVENT_ASSERT_DUMP ||
 	     rxd->ext_eid == MCU_EXT_EVENT_PS_SYNC ||
 	     rxd->ext_eid == MCU_EXT_EVENT_BCC_NOTIFY ||
+	     rxd->ext_eid == MCU_EXT_EVENT_BF_STATUS_READ ||
 	     !rxd->seq) &&
 	     !(rxd->eid == MCU_CMD_EXT_CID &&
 	       rxd->ext_eid == MCU_EXT_EVENT_WA_TX_STAT))
@@ -2934,7 +2940,8 @@ int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd)
 	}
 #endif
 
-	if (mt76_connac_spe_idx(phy->mt76->antenna_mask))
+	if (mt76_connac_spe_idx(phy->mt76->antenna_mask) &&
+	    !mt76_testmode_enabled(phy->mt76))
 		req.tx_path_num = fls(phy->mt76->antenna_mask);
 
 	if (phy->mt76->hw->conf.flags & IEEE80211_CONF_MONITOR)
@@ -3002,14 +3009,14 @@ static int mt7915_mcu_set_eeprom_flash(struct mt7915_dev *dev)
 	return 0;
 }
 
-int mt7915_mcu_set_eeprom(struct mt7915_dev *dev)
+int mt7915_mcu_set_eeprom(struct mt7915_dev *dev, bool flash_mode)
 {
 	struct mt7915_mcu_eeprom req = {
 		.buffer_mode = EE_MODE_EFUSE,
 		.format = EE_FORMAT_WHOLE,
 	};
 
-	if (dev->flash_mode)
+	if (flash_mode)
 		return mt7915_mcu_set_eeprom_flash(dev);
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(EFUSE_BUFFER_MODE),

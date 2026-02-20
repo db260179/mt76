@@ -599,6 +599,7 @@ mt7915_mac_fill_rx_vector(struct mt7915_dev *dev, struct sk_buff *skb)
 			wb_rssi = le32_to_cpu(rxv[9]);
 
 		phy->test.last_rcpi[i] = rcpi & 0xff;
+		phy->test.last_rssi[i] = to_rssi(GENMASK(7, 0), rcpi);
 		phy->test.last_ib_rssi[i] = ib_rssi & 0xff;
 		phy->test.last_wb_rssi[i] = wb_rssi & 0xff;
 	}
@@ -624,16 +625,38 @@ mt7915_mac_write_txwi_tm(struct mt7915_phy *phy, __le32 *txwi,
 {
 #ifdef CONFIG_NL80211_TESTMODE
 	struct mt76_testmode_data *td = &phy->mt76->test;
+	struct mt76_testmode_entry_data *ed;
+	struct mt76_wcid *wcid;
 	const struct ieee80211_rate *r;
-	u8 bw, mode, nss = td->tx_rate_nss;
-	u8 rate_idx = td->tx_rate_idx;
+	u8 bw, mode, nss, rate_idx, ldpc;
 	u16 rateval = 0;
 	u32 val;
 	bool cck = false;
 	int band;
 
-	if (skb != phy->mt76->test.tx_skb)
+	txwi[3] &= ~cpu_to_le32(MT_TXD3_SN_VALID);
+	txwi[7] |= cpu_to_le32(FIELD_PREP(MT_TXD7_SPE_IDX,
+					  phy->test.spe_idx));
+
+	if (td->tx_rate_mode == MT76_TM_TX_MODE_HE_MU) {
+		txwi[1] |= cpu_to_le32(BIT(18));
+		txwi[2] = 0;
+		txwi[3] &= ~cpu_to_le32(MT_TXD3_NO_ACK);
+		le32p_replace_bits(&txwi[3], 0x1f, MT_TXD3_REM_TX_COUNT);
+
 		return;
+	}
+
+	mt76_tm_for_each_entry(phy->mt76, wcid, ed)
+		if (ed->tx_skb == skb)
+			break;
+
+	if (!ed)
+		return;
+
+	nss = ed->tx_rate_nss;
+	rate_idx = ed->tx_rate_idx;
+	ldpc = ed->tx_rate_ldpc;
 
 	switch (td->tx_rate_mode) {
 	case MT76_TM_TX_MODE_HT:
@@ -664,7 +687,7 @@ mt7915_mac_write_txwi_tm(struct mt7915_phy *phy, __le32 *txwi,
 			rate_idx += 4;
 
 		r = &phy->mt76->hw->wiphy->bands[band]->bitrates[rate_idx];
-		val = cck ? r->hw_value_short : r->hw_value;
+		val = r->hw_value;
 
 		mode = val >> 8;
 		rate_idx = val & 0xff;
@@ -723,13 +746,14 @@ mt7915_mac_write_txwi_tm(struct mt7915_phy *phy, __le32 *txwi,
 	if (mode >= MT_PHY_TYPE_HE_SU)
 		val |= FIELD_PREP(MT_TXD6_HELTF, td->tx_ltf);
 
-	if (td->tx_rate_ldpc || (bw > 0 && mode >= MT_PHY_TYPE_HE_SU))
+	if (ldpc || (bw > 0 && mode >= MT_PHY_TYPE_HE_SU))
 		val |= MT_TXD6_LDPC;
 
 	txwi[3] &= ~cpu_to_le32(MT_TXD3_SN_VALID);
+	if (phy->test.bf_en)
+		val |= MT_TXD6_TX_IBF | MT_TXD6_TX_EBF;
+
 	txwi[6] |= cpu_to_le32(val);
-	txwi[7] |= cpu_to_le32(FIELD_PREP(MT_TXD7_SPE_IDX,
-					  phy->test.spe_idx));
 #endif
 }
 
@@ -1363,7 +1387,7 @@ mt7915_mac_restart(struct mt7915_dev *dev)
 		goto out;
 
 	/* set the necessary init items */
-	ret = mt7915_mcu_set_eeprom(dev);
+	ret = mt7915_mcu_set_eeprom(dev, dev->flash_mode);
 	if (ret)
 		goto out;
 
