@@ -745,25 +745,29 @@ mt7915_tm_txbf_apply_tx(struct mt7915_phy *phy, u16 wlan_idx, bool ebf,
 				 sizeof(req), false);
 }
 
-static int mt7915_tm_txbf_set_rate(struct mt7915_phy *phy,
-				   struct mt76_wcid *wcid)
+static int mt7915_tm_txbf_set_rate(struct mt7915_phy *phy, struct mt76_wcid *wcid)
 {
 	struct mt7915_dev *dev = phy->dev;
+	/* Define ed and td which were missing in your previous attempt */
 	struct mt76_testmode_entry_data *ed = mt76_testmode_entry_data(phy->mt76, wcid);
 	struct mt76_testmode_data *td = &phy->mt76->test;
+	/* Get the standard ieee80211_sta structure from the wcid */
 	struct ieee80211_sta *sta = wcid_to_sta(wcid);
 	struct sta_phy rate = {};
 
-	if (!sta)
-		return 0;
-
+	/* Fill the rate structure using the testmode data */
 	rate.type = mt7915_tm_rate_to_phy(td->tx_rate_mode);
-	rate.bw = mt76_connac_chan_bw(&phy->mt76->chandef);
-	rate.nss = ed->tx_rate_nss;
 	rate.mcs = ed->tx_rate_idx;
-	rate.ldpc = (rate.bw || ed->tx_rate_ldpc) * GENMASK(2, 0);
+	rate.nss = ed->tx_rate_nss;
+	/* rate.sgi and rate.stbc are not available in standard mt76 core */
+	// rate.sgi = ed->tx_rate_sgi;
+	rate.ldpc = ed->tx_rate_ldpc;
+	// rate.stbc = ed->tx_rate_stbc;
 
-	return mt7915_mcu_set_fixed_rate_ctrl(dev, phy->monitor_vif, sta,
+	/* * Call the MCU function using phy->monitor_vif (ieee80211_vif)
+	 * and sta (ieee80211_sta) to satisfy the current API requirements.
+	 */
+	return mt7915_mcu_set_fixed_rate_ctrl(dev, phy->monitor_vif, sta, wcid,
 					      &rate, RATE_PARAM_FIXED);
 }
 
@@ -1698,7 +1702,7 @@ mt7915_tm_init(struct mt7915_phy *phy, bool en)
 
 	phy->sku_limit_en = !en;
 	phy->sku_path_en = !en;
-	mt7915_mcu_set_sku_en(phy);
+	mt7915_mcu_set_sku_en(phy, phy->sku_path_en);
 
 	mt7915_tm_mode_ctrl(dev, en);
 	mt7915_tm_reg_backup_restore(phy);
@@ -2455,7 +2459,7 @@ mt7915_tm_update_params(struct mt7915_phy *phy, u32 changed)
 	if (changed & BIT(TM_CHANGED_SKU_EN)) {
 		phy->sku_limit_en = td->sku_en;
 		phy->sku_path_en = td->sku_en;
-		mt7915_mcu_set_sku_en(phy);
+		mt7915_mcu_set_sku_en(phy, phy->sku_path_en);
 		mt7915_mcu_set_txpower_sku(phy);
 	}
 	if (changed & BIT(TM_CHANGED_AID))

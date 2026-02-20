@@ -2353,9 +2353,11 @@ static int mt7915_token_read(struct seq_file *s, void *data)
 		if (!mphy)
 			continue;
 
+#if 0
 		seq_printf(s, "Band%d consume: %d, free:%d total: %d\n",
 			   i, mphy->tokens, mdev->token_threshold - mphy->tokens,
 			   mdev->token_threshold);
+#endif
 	}
 out:
 	spin_unlock_bh(&dev->mt76.token_lock);
@@ -3148,9 +3150,12 @@ static int mt7915_dump_version(struct seq_file *s, void *data)
 		return 0;
 
 	mdev = &dev->mt76;
+
+#if 0
 	seq_printf(s, "Rom Patch Build Time: %.16s\n", mdev->patch_hdr->build_date);
 	seq_printf(s, "WM Patch Build Time: %.16s\n", mdev->wm_hdr->build_date);
 	seq_printf(s, "WA Patch Build Time: %.16s\n", mdev->wa_hdr->build_date);
+#endif
 
 	for (i = 0; i < ADIE_MAX_CNT; i++) {
 		seq_printf(s, "adie[%d]: id=0x%04x version=0x%04x\n",
@@ -4065,13 +4070,13 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 	debugfs_create_u8("mgmt_pwr_enhance", 0600, dir, &phy->mt76->mgmt_pwr_enhance);
-	
+
 	debugfs_create_file("sw_aci", 0600, dir, dev,
 			    &fops_sw_aci);
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,
 				    mt7915_show_eeprom_mode);
-				    
+
 	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
 	debugfs_create_file("thermal_recal", 0200, dir, dev, &fops_thermal_recal);
 

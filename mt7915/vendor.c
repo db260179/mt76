@@ -1522,7 +1522,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 		if (!limits.path.ofdm[0])
 			phy->sku_path_en = false;
 
-		err = mt7915_mcu_set_sku_en(phy);
+		err = mt7915_mcu_set_sku_en(phy, phy->sku_path_en);
 		if (err)
 			return err;
 	}
