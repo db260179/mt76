@@ -919,6 +919,21 @@ void mt7915_mac_sta_remove(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 {
 	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_phy *phy = msta->vif->phy;
+
+#ifdef CONFIG_MTK_VENDOR
+	struct csi_mac_filter *ent;
+
+	mutex_lock(&phy->csi.mac_filter_lock);
+	ent = mt7915_csi_mac_filter_find(phy, sta->addr);
+	if (ent && !mt7915_mcu_set_csi(phy, 2, 8, 1, 0, sta->addr, 0)) {
+		list_del(&ent->node);
+		kfree(ent);
+		phy->csi.mac_filter_cnt--;
+	}
+
+	mutex_unlock(&phy->csi.mac_filter_lock);
+#endif
 
 	mt7915_mac_wtbl_update(dev, msta->wcid.idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
