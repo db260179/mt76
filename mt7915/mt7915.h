@@ -238,6 +238,7 @@ struct csi_data {
 
 	struct list_head node;
 };
+
 struct csi_mac_filter {
 	struct list_head node;
 
@@ -250,6 +251,33 @@ struct csi_mac_filter {
 #define SHOW_CSI_MAC 2
 
 #define MAX_CSI_MAC_NUM 10
+
+#define MT7915_AIR_MONITOR_MAX_ENTRY	16
+#define MT7915_AIR_MONITOR_MAX_GROUP	MT7915_AIR_MONITOR_MAX_ENTRY >> 1
+
+struct mt7915_air_monitor_group {
+	bool enable;
+	bool used[2];
+};
+
+struct mt7915_air_monitor_entry {
+	bool enable;
+
+	u8 group_idx;
+	u8 group_used_idx;
+	u8 muar_idx;
+	u8 addr[ETH_ALEN];
+	unsigned int last_seen;
+	s8 rssi[4];
+	struct ieee80211_sta *sta;
+};
+
+struct mt7915_air_monitor_ctrl {
+	u8 enable;
+
+	struct mt7915_air_monitor_group group[MT7915_AIR_MONITOR_MAX_GROUP];
+	struct mt7915_air_monitor_entry entry[MT7915_AIR_MONITOR_MAX_ENTRY];
+};
 #endif
 
 struct mt7915_phy {
@@ -315,6 +343,8 @@ struct mt7915_phy {
 		u32 interval;
 		u32 last_record;
 	} csi;
+
+	struct mt7915_air_monitor_ctrl amnt_ctrl;
 #endif
 };
 
@@ -752,6 +782,9 @@ int mt7915_mcu_set_csi(struct mt7915_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr, u32 sta_interval);
 struct csi_mac_filter *mt7915_csi_mac_filter_find(struct mt7915_phy *phy, u8 *addr);
 void mt7915_csi_mac_filter_clear(struct mt7915_phy *phy);
+void mt7915_vendor_amnt_fill_rx(struct mt7915_phy *phy, struct sk_buff *skb);
+int mt7915_vendor_amnt_sta_remove(struct mt7915_phy *phy,
+				  struct ieee80211_sta *sta);
 #endif
 
 #ifdef MTK_DEBUG
