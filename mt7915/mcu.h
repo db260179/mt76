@@ -866,6 +866,13 @@ struct three_wire_cfg {
 	u8 rsv[3];
 } __packed;
 
+struct rts_sigta_cfg {
+	__le16 tag;
+	__le16 length;
+	bool enable; /* 0: Disable, 1: Enable */
+	u8 rsv[3];
+} __packed;
+
 struct cfg_basic_info {
 	u8 dbdc_idx;
 	u8 rsv[3];
@@ -873,11 +880,13 @@ struct cfg_basic_info {
 	union {
 		struct cert_cfg cert;
 		struct three_wire_cfg three_wire;
+		struct rts_sigta_cfg rts_sigta;
 	};
 } __packed;
 
 enum {
 	CFGINFO_CERT_CFG = 4,
+	CFGINFO_RTS_SIGTA_EN_FEATURE = 7,
 	CFGINFO_3WIRE_EN_CFG = 10,
 };
 

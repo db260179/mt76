@@ -4762,6 +4762,12 @@ int mt7915_mcu_set_cfg(struct mt7915_phy *phy, u8 cfg_info, u8 type)
 		req.cert.length = cpu_to_le16(tlv_len);
 		req.cert.cert_program = type;
 		break;
+	case CFGINFO_RTS_SIGTA_EN_FEATURE:
+		tlv_len = sizeof(struct rts_sigta_cfg);
+		req.rts_sigta.tag = cpu_to_le16(cfg_info);
+		req.rts_sigta.length = cpu_to_le16(tlv_len);
+		req.rts_sigta.enable  = type ? 1: 0;
+		break;
 	case CFGINFO_3WIRE_EN_CFG:
 		tlv_len = sizeof(struct three_wire_cfg);
 		req.three_wire.tag = cpu_to_le16(cfg_info);
