@@ -2414,7 +2414,7 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 	flow->tsf = le64_to_cpu(twt_agrt->twt);
 
 	if (mt7915_mcu_twt_agrt_update(dev, msta->vif, flow, MCU_TWT_AGRT_ADD)) {
-		list_del(&flow->list);
+		list_del_init(&flow->list);
 		goto unlock;
 	}
 
