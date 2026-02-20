@@ -2306,7 +2306,7 @@ static int mt7915_mac_check_twt_req(struct ieee80211_twt_setup *twt)
 	duration = twt_agrt->min_twt_dur << 8;
 
 	interval = (u64)mantissa << exp;
-	if (interval < duration)
+	if (interval <= duration)
 		return -EOPNOTSUPP;
 
 	return 0;
