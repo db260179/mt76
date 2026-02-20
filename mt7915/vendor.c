@@ -100,6 +100,11 @@ ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
 
+static struct nla_policy
+bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
+	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP] = { .type = NLA_U64 },
+};
+
 struct csi_null_tone {
 	u8 start;
 	u8 end;
@@ -1431,6 +1436,27 @@ mt7915_vendor_ibf_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	return 1;
 }
 
+static int
+mt7915_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     struct sk_buff *skb, const void *data, int data_len,
+			     unsigned long *storage)
+{
+	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
+	struct ieee80211_bss_conf *bss_conf = &vif->bss_conf;
+	int len = 0;
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	if (nla_put_u64_64bit(skb,
+	    MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP,
+	    ~bss_conf->used_color_bitmap, NL80211_ATTR_PAD))
+		return -ENOMEM;
+	len += 1;
+
+	return len;
+}
 
 static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
@@ -1537,6 +1563,17 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.dumpit = mt7915_vendor_ibf_ctrl_dump,
 		.policy = ibf_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_IBF_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BSS_COLOR_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.dumpit = mt7915_vendor_bss_color_ctrl_dump,
+		.policy = bss_color_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
 	}
 };
 
