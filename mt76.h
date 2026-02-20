@@ -1096,6 +1096,9 @@ struct mt76_dev {
 		struct mt76_sdio sdio;
 	};
 
+	/* for mtk internal */
+	const char *bin_file_name;
+
 	atomic_t bus_hung;
 };
 
@@ -1402,6 +1405,7 @@ int mt76_eeprom_override(struct mt76_phy *phy);
 int mt76_get_of_data_from_mtd(struct mt76_dev *dev, void *eep, int offset, int len);
 int mt76_get_of_data_from_nvmem(struct mt76_dev *dev, void *eep,
 				const char *cell_name, int len);
+bool mt76_check_bin_file_mode(struct mt76_dev *dev);
 
 struct mt76_queue *
 mt76_init_queue(struct mt76_dev *dev, int qid, int idx, int n_desc,

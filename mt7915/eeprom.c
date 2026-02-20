@@ -10,6 +10,30 @@ static bool enable_6ghz;
 module_param(enable_6ghz, bool, 0644);
 MODULE_PARM_DESC(enable_6ghz, "Enable 6 GHz instead of 5 GHz on hardware that supports both");
 
+static int
+mt7915_eeprom_load_precal_binfile(struct mt7915_dev *dev, u32 offs, u32 size)
+{
+	const struct firmware *fw = NULL;
+	int ret;
+
+	ret = request_firmware(&fw, dev->mt76.bin_file_name, dev->mt76.dev);
+	if (ret)
+		return ret;
+
+	if (!fw || !fw->data) {
+		dev_err(dev->mt76.dev, "Invalid bin (bin file mode), load precal fail\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	memcpy(dev->cal, fw->data + offs, size);
+
+out:
+	release_firmware(fw);
+
+	return ret;
+}
+
 static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
@@ -28,6 +52,9 @@ static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 		return -ENOMEM;
 
 	offs = is_mt7915(&dev->mt76) ? MT_EE_PRECAL : MT_EE_PRECAL_V2;
+
+	if (dev->bin_file_mode)
+		return mt7915_eeprom_load_precal_binfile(dev, offs, size);
 
 	ret = mt76_get_of_data_from_mtd(mdev, dev->cal, offs, size);
 	if (!ret)
@@ -64,8 +91,11 @@ static int mt7915_check_eeprom(struct mt7915_dev *dev)
 	}
 }
 
-static char *mt7915_eeprom_name(struct mt7915_dev *dev)
+const char *mt7915_eeprom_name(struct mt7915_dev *dev)
 {
+	if (dev->bin_file_mode)
+		return dev->mt76.bin_file_name;
+
 	switch (mt76_chip(&dev->mt76)) {
 	case 0x7915:
 		return dev->dbdc_support ?
@@ -106,7 +136,10 @@ mt7915_eeprom_load_default(struct mt7915_dev *dev)
 		return ret;
 
 	if (!fw || !fw->data) {
-		dev_err(dev->mt76.dev, "Invalid default bin\n");
+		if (dev->bin_file_mode)
+			dev_err(dev->mt76.dev, "Invalid bin (bin file mode)\n");
+		else
+			dev_err(dev->mt76.dev, "Invalid default bin\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -166,8 +199,13 @@ static int mt7915_eeprom_load(struct mt7915_dev *dev)
 	if (ret < 0)
 		return ret;
 
-	if (ret)
-		dev->flash_mode = true;
+	if (ret) {
+ 		dev->flash_mode = true;
+		dev->eeprom_mode = FLASH_MODE;
+		}
+	else {
+		dev->eeprom_mode = EFUSE_MODE;
+	}
 	
 	mt7915_eeprom_load_efuse(dev);
 
@@ -434,6 +472,7 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 			eeprom[ddie_offset] = buf[ddie_offset % MT7915_EEPROM_BLOCK_SIZE];
 			prev_block_num = block_num;
 		}
+
 	}
 
 	/* adie */
@@ -482,12 +521,33 @@ int mt7915_eeprom_init(struct mt7915_dev *dev)
 {
 	int ret;
 
-	ret = mt7915_eeprom_load(dev);
+	dev->bin_file_mode = mt76_check_bin_file_mode(&dev->mt76);
+	if (dev->bin_file_mode) {
+		dev->mt76.eeprom.size = mt7915_eeprom_size(dev);
+		dev->mt76.eeprom.data = devm_kzalloc(dev->mt76.dev, dev->mt76.eeprom.size,
+						     GFP_KERNEL);
+		if (!dev->mt76.eeprom.data)
+			return -ENOMEM;
+		ret = mt7915_eeprom_load_default(dev);
+		if (ret)
+			return ret;
+
+		ret = mt7915_check_eeprom(dev);
+		if (ret)
+			return ret;
+		dev->eeprom_mode = BIN_FILE_MODE;
+	} else {
+		ret = mt7915_eeprom_load(dev);
+	}
+
 	if (ret < 0) {
 		if (ret != -EINVAL)
 			return ret;
 
 		dev_warn(dev->mt76.dev, "eeprom load fail, use default bin\n");
+		dev->bin_file_mode = false;
+		dev->eeprom_mode = DEFAULT_BIN_MODE;
+
 		ret = mt7915_eeprom_load_default(dev);
 		if (ret)
 			return ret;
