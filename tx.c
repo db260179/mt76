@@ -137,9 +137,8 @@ mt76_tx_status_skb_add(struct mt76_dev *dev, struct mt76_wcid *wcid,
 
 	if (!(info->flags & (IEEE80211_TX_CTL_REQ_TX_STATUS |
 			     IEEE80211_TX_CTL_RATE_CTRL_PROBE))) {
-		if (mtk_wed_device_active(&dev->mmio.wed) &&
-		    ((info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) ||
-		     ieee80211_is_data(hdr->frame_control)))
+		if (info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP ||
+		    ieee80211_is_data(hdr->frame_control))
 			return MT_PACKET_ID_WED;
 
 		return MT_PACKET_ID_NO_SKB;
