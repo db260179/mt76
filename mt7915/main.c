@@ -872,6 +872,10 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
+	bool ext_phy = mvif->phy != &dev->phy;
+#ifdef CONFIG_MTK_VENDOR
+	struct mt7915_phy *phy = ext_phy ? mt7915_ext_phy(dev) : &dev->phy;
+#endif
 	int i, ret;
 	u32 addr;
 
@@ -891,6 +895,11 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 		ret = mt7915_mcu_add_rate_ctrl(dev, vif, sta, &msta->wcid, false);
 		if (ret)
 			return ret;
+			
+#ifdef CONFIG_MTK_VENDOR
+	if (phy->muru_onoff & MUMIMO_DL_CERT)
+		mt7915_mcu_set_mimo(phy, 0);
+#endif
 
 		msta->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 		msta->wcid.sta = 1;

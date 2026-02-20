@@ -1273,6 +1273,7 @@ enum {
 	/* for vendor csi and air monitor */
 	MCU_EXT_CMD_SMESH_CTRL = 0xae,
 	MCU_EXT_CMD_SET_QOS_MAP = 0xb4,
+	MCU_EXT_CMD_CERT_CFG = 0xb7,
 	MCU_EXT_CMD_WF_RF_PIN_CTRL = 0xbd,
 	MCU_EXT_CMD_CSI_CTRL = 0xc2,
 };
