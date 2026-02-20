@@ -3770,6 +3770,25 @@ static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
 	return 0;
 }
 
+static int
+mt7915_sw_aci_set(void *data, u64 val)
+{
+#define SWLNA_ENABLE 6
+	struct mt7915_dev *dev = data;
+	struct {
+		u32 subcmd;
+		u8 enable;
+	} req = {
+		.subcmd = SWLNA_ENABLE,
+		.enable = (u8) val,
+	};
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SWLNA_ACI_CTRL), &req, sizeof(req), NULL);
+}
+
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_sw_aci, NULL,
+			 mt7915_sw_aci_set, "%llx\n");
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -3855,6 +3874,9 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 			    &fops_txbf_sta_rec);
 
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
+	
+	debugfs_create_file("sw_aci", 0600, dir, dev,
+			    &fops_sw_aci);
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,
 				    mt7915_show_eeprom_mode);
