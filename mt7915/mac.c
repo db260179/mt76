@@ -8,6 +8,7 @@
 #include "../dma.h"
 #include "mac.h"
 #include "mcu.h"
+#include "vendor.h"
 
 #define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
 
@@ -1912,6 +1913,21 @@ static void mt7915_mac_severe_check(struct mt7915_phy *phy)
 	phy->trb_ts = trb;
 }
 
+#ifdef CONFIG_MTK_VENDOR
+void mt7915_capi_sta_rc_work(void *data, struct ieee80211_sta *sta)
+{
+	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_dev *dev = msta->vif->phy->dev;
+	u32 *changed = data;
+
+	spin_lock_bh(&dev->mt76.sta_poll_lock);
+	msta->changed |= *changed;
+	if (list_empty(&msta->rc_list))
+		list_add_tail(&msta->rc_list, &dev->sta_rc_list);
+	spin_unlock_bh(&dev->mt76.sta_poll_lock);
+}
+#endif
+
 void mt7915_mac_sta_rc_work(struct work_struct *work)
 {
 	struct mt7915_dev *dev = container_of(work, struct mt7915_dev, rc_work);
@@ -1934,6 +1950,13 @@ void mt7915_mac_sta_rc_work(struct work_struct *work)
 		sta = container_of((void *)msta, struct ieee80211_sta, drv_priv);
 		vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
 
+#ifdef CONFIG_MTK_VENDOR
+		if (changed & CAPI_RFEATURE_CHANGED) {
+			mt7915_mcu_set_rfeature_starec(&changed, dev, vif, sta);
+			spin_lock_bh(&dev->mt76.sta_poll_lock);
+			continue;
+		}
+#endif
 		if (changed & (IEEE80211_RC_SUPP_RATES_CHANGED |
 			       IEEE80211_RC_NSS_CHANGED |
 			       IEEE80211_RC_BW_CHANGED))

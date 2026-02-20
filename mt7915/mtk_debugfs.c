@@ -2560,7 +2560,8 @@ static int mt7915_muru_onoff_get(void *data, u64 *val)
 
 	*val = phy->muru_onoff;
 
-	printk("mumimo ul:%d, mumimo dl:%d, ofdma ul:%d, ofdma dl:%d\n",
+	printk("cert mumimo dl:%d, normal mumimo ul:%d, mumimo dl:%d, ofdma ul:%d, ofdma dl:%d\n",
+		    !!(phy->muru_onoff & MUMIMO_DL_CERT),
 		    !!(phy->muru_onoff & MUMIMO_UL),
 		    !!(phy->muru_onoff & MUMIMO_DL),
 		    !!(phy->muru_onoff & OFDMA_UL),
@@ -2573,8 +2574,8 @@ static int mt7915_muru_onoff_set(void *data, u64 val)
 {
 	struct mt7915_phy *phy = data;
 
-	if (val > 15) {
-		printk("Wrong value! The value is between 0 ~ 15.\n");
+	if (val > 31) {
+		printk("Wrong value! The value is between 0 ~ 31.\n");
 		goto exit;
 	}
 
