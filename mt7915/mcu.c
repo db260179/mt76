@@ -234,6 +234,11 @@ mt7915_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 
 	mt7915_mcu_set_timeout(mdev, cmd);
 
+#ifdef MTK_DEBUG
+	if (dev->dbg.dump_mcu_pkt)
+		mt7915_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
+#endif
+
 	return mt76_tx_queue_skb_raw(dev, mdev->q_mcu[qid], skb, 0);
 }
 
@@ -2479,7 +2484,10 @@ static int mt7915_red_set_watermark(struct mt7915_dev *dev)
 				 sizeof(req), false);
 }
 
-static int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled)
+#ifndef MTK_DEBUG
+static
+#endif
+int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled)
 {
 #define RED_DISABLE		0
 #define RED_BY_WA_ENABLE	2
@@ -3441,6 +3449,8 @@ int mt7915_mcu_set_txpower_frame_min(struct mt7915_phy *phy, s8 txpower)
 		.txpower_min = txpower * 2, /* 0.5db */
 	};
 
+	pr_info("%s: enable = %d\n", __func__, enable);
+
 	return mt76_mcu_send_msg(&dev->mt76,
 				 MCU_EXT_CMD(TX_POWER_FEATURE_CTRL), &req,
 				 sizeof(req), true);
@@ -4291,6 +4301,23 @@ out:
 	return ret;
 }
 
+#ifdef MTK_DEBUG
+int mt7915_dbg_mcu_wa_cmd(struct mt7915_dev *dev, int cmd, u32 a1, u32 a2, u32 a3, bool wait_resp)
+{
+	struct {
+		__le32 args[3];
+	} req = {
+		.args = {
+			cpu_to_le32(a1),
+			cpu_to_le32(a2),
+			cpu_to_le32(a3),
+		},
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, cmd, &req, sizeof(req), wait_resp);
+}
+#endif
+
 int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 {
 	struct {
@@ -4319,3 +4346,22 @@ int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 
 	return 0;
 }
+
+#ifdef MTK_DEBUG
+int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable)
+{
+	struct {
+		u16 action;
+		u8 _rsv1[2];
+		u16 wcid;
+		u8 enable;
+		u8 _rsv2[5];
+	} __packed req = {
+		.action = cpu_to_le16(1),
+		.wcid = cpu_to_le16(wcid),
+		.enable = enable,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MEC_CTRL), &req, sizeof(req), true);
+}
+#endif

@@ -8,6 +8,9 @@
 #include "mac.h"
 
 #define FW_BIN_LOG_MAGIC	0x44e98caf
+#ifdef MTK_DEBUG
+#define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
+#endif
 
 /** global debugfs **/
 
@@ -517,6 +520,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 	int ret;
 
 	dev->fw.debug_wm = val ? MCU_FW_LOG_TO_HOST : 0;
+#ifdef MTK_DEBUG
+	dev->fw.debug_wm = val;
+#endif
 
 	if (dev->fw.debug_bin)
 		val = 16;
@@ -541,6 +547,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		if (ret)
 			goto out;
 	}
+#ifdef MTK_DEBUG
+	mt7915_mcu_fw_dbg_ctrl(dev, 68, !!val);
+#endif
 
 	/* WM CPU info record control */
 	mt76_clear(dev, MT_CPU_UTIL_CTRL, BIT(0));
@@ -548,6 +557,12 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		(dev->fw.debug_wm ? 0 : BIT(0)));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_MASK_CLR_ADDR, BIT(5));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_SOFT_ADDR, BIT(5));
+
+#ifdef MTK_DEBUG
+	if (dev->fw.debug_bin & BIT(3))
+		/* use bit 7 to indicate v2 magic number */
+		dev->fw.debug_wm |= BIT(7);
+#endif
 
 out:
 	if (ret)
@@ -561,7 +576,11 @@ mt7915_fw_debug_wm_get(void *data, u64 *val)
 {
 	struct mt7915_dev *dev = data;
 
-	*val = dev->fw.debug_wm;
+#ifdef MTK_DEBUG
+	*val = dev->fw.debug_wm & ~BIT(7);
+#else
+	val = dev->fw.debug_wm;
+#endif
 
 	return 0;
 }
@@ -636,15 +655,29 @@ mt7915_fw_debug_bin_set(void *data, u64 val)
 	};
 	struct mt7915_dev *dev = data;
 
-	if (!dev->relay_fwlog)
+	if (!dev->relay_fwlog && val) {
 		dev->relay_fwlog = relay_open("fwlog_data", dev->debugfs_dir,
 					    1500, 512, &relay_cb, NULL);
-	if (!dev->relay_fwlog)
-		return -ENOMEM;
+		if (!dev->relay_fwlog)
+			return -ENOMEM;
+	}
 
 	dev->fw.debug_bin = val;
 
 	relay_reset(dev->relay_fwlog);
+
+#ifdef MTK_DEBUG
+	dev->dbg.dump_mcu_pkt = val & BIT(4) ? true : false;
+	dev->dbg.dump_txd = val & BIT(5) ? true : false;
+	dev->dbg.dump_tx_pkt = val & BIT(6) ? true : false;
+	dev->dbg.dump_rx_pkt = val & BIT(7) ? true : false;
+	dev->dbg.dump_rx_raw = val & BIT(8) ? true : false;
+#endif
+
+	if (dev->relay_fwlog && !val) {
+		relay_close(dev->relay_fwlog);
+		dev->relay_fwlog = NULL;
+	}
 
 	return mt7915_fw_debug_wm_set(dev, dev->fw.debug_wm);
 }
@@ -1341,6 +1374,11 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 	if (!ext_phy)
 		dev->debugfs_dir = dir;
 
+#ifdef MTK_DEBUG
+	debugfs_create_u16("wlan_idx", 0600, dir, &dev->wlan_idx);
+	mt7915_mtk_init_debugfs(phy, dir);
+#endif
+
 	return 0;
 }
 
@@ -1353,6 +1391,12 @@ mt7915_debugfs_write_fwlog(struct mt7915_dev *dev, const void *hdr, int hdrlen,
 	void *dest;
 
 	spin_lock_irqsave(&lock, flags);
+
+	if (!dev->relay_fwlog) {
+		spin_unlock_irqrestore(&lock, flags);
+		return;
+	}
+
 	dest = relay_reserve(dev->relay_fwlog, hdrlen + len + 4);
 	if (dest) {
 		*(u32 *)dest = hdrlen + len;
@@ -1381,17 +1425,50 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 		.msg_type = cpu_to_le16(PKT_TYPE_RX_FW_MONITOR),
 	};
 
-	if (!dev->relay_fwlog)
-		return;
+#ifdef MTK_DEBUG
+	struct {
+		__le32 magic;
+		u8 version;
+		u8 _rsv;
+		__le16 serial_id;
+		__le32 timestamp;
+		__le16 msg_type;
+		__le16 len;
+	} hdr2 = {
+		.version = 0x1,
+		.magic = cpu_to_le32(FW_BIN_LOG_MAGIC_V2),
+		.msg_type = PKT_TYPE_RX_FW_MONITOR,
+	};
+#endif
 
+#ifdef MTK_DEBUG
+	/* old magic num */
+	if (!(dev->fw.debug_wm & BIT(7))) {
+		hdr.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+	} else {
+		hdr2.serial_id = dev->dbg.fwlog_seq++;
+		hdr2.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr2.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr2, sizeof(hdr2), data, len);
+	}
+#else
 	hdr.timestamp = cpu_to_le32(mt76_rr(dev, MT_LPON_FRCR(0)));
 	hdr.len = *(__le16 *)data;
 	mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+#endif
 }
 
 bool mt7915_debugfs_rx_log(struct mt7915_dev *dev, const void *data, int len)
 {
+#ifdef MTK_DEBUG
+	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC &&
+	    get_unaligned_le32(data) != FW_BIN_LOG_MAGIC_V2 &&
+	    get_unaligned_le32(data) != PKT_BIN_DEBUG_MAGIC)
+#else
 	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC)
+#endif
 		return false;
 
 	if (dev->relay_fwlog)

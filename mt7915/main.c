@@ -73,7 +73,11 @@ int mt7915_run(struct ieee80211_hw *hw)
 	if (ret)
 		goto out;
 
+#ifdef MTK_DEBUG
+	ret = mt7915_mcu_set_sku_en(phy, !dev->dbg.sku_disable);
+#else
 	ret = mt7915_mcu_set_sku_en(phy);
+#endif
 	if (ret)
 		goto out;
 
@@ -256,13 +260,14 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	mvif->sta.wcid.idx = idx;
 	mvif->sta.wcid.tx_info |= MT_WCID_TX_INFO_SET;
 	mt76_wcid_init(&mvif->sta.wcid, phy->mt76->band_idx);
+	mvif->sta.vif = mvif;
 
 	/* init Default QoS map, defined in section 2.3 of RFC8325.
 	 * Three most significant bits of DSCP are used as UP.
 	 */
 	for (i = 0; i < IP_DSCP_NUM; ++i)
 		mvif->qos_map[i] = i >> 3;
-	
+
 	/* Recommended QoS map, defined in section 4 of RFC8325.
 	 * Used in cfg80211_classify8021d since kernel v6.8.
 	 */
@@ -1284,7 +1289,7 @@ static void mt7915_sta_rc_update(struct ieee80211_hw *hw,
 
 	if (!msta->wcid.sta)
 		return;
-		
+
 	if (!msta->vif) {
 		dev_warn(dev->mt76.dev, "Un-initialized STA %pM wcid %d in rc_work\n",
 			 sta->addr, msta->wcid.idx);
@@ -1781,7 +1786,7 @@ mt7915_set_qos_map(struct ieee80211_vif *vif, struct cfg80211_qos_map *usr_qos_m
 		 */
 		for (i = 0; i < IP_DSCP_NUM; ++i)
 			req.qos_map[i] = i >> 3;
-			
+
 		/* Recommended QoS map, defined in section 4 of RFC8325.
 		* Used in cfg80211_classify8021d since kernel v6.8.
 	 	*/
