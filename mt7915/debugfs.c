@@ -12,6 +12,10 @@
 #define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
 #endif
 
+#define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+
+
 /** global debugfs **/
 
 struct hw_queue_map {
@@ -207,6 +211,361 @@ mt7915_sys_recovery_get(struct file *file, char __user *user_buf,
 static const struct file_operations mt7915_sys_recovery_ops = {
 	.write = mt7915_sys_recovery_set,
 	.read = mt7915_sys_recovery_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
+static ssize_t mt7915_vow_get(struct file *file, char __user *user_buf,
+                              size_t count, loff_t *ppos)
+{
+	char *buff;
+	int desc = 0;
+	ssize_t ret;
+	static const size_t bufsz = 1000;
+
+	buff = kmalloc(bufsz, GFP_KERNEL);
+	if (!buff)
+		return -ENOMEM;
+
+	desc += scnprintf(buff + desc, bufsz - desc,
+			  "======== Control =============\n"
+			  "vow_atf_en=<0/1> 0:disable, 1:enable\n"
+			  "vow_watf_en=<0/1> 0:disable, 1:enable\n"
+			  "vow_watf_quantum=<level>-<quantum> unit 256us\n"
+			  "======== Station table =============\n"
+			  "vow_sta_dwrr_quantum_id=<wlanidx>-<WMM AC>-<Qid>\n"
+			  "vow_dwrr_max_wait_time=<time> 256us\n"
+			  "======== Debug =============\n"
+			  "vow_show_en=<0/1> 0:disable, 1:enable\n"
+			  "vow_show_sta=<STA num>\n"
+			  "show_vow_info\n"
+			  "show_vow_sta_conf=<STA num> 0:all\n"
+			  "======= Send command example =======\n"
+			  "echo 'show_vow_info' > /sys/kernel/debug/ieee80211/phy0/mt76/vow\n"
+			  "================================================================\n");
+	ret = simple_read_from_buffer(user_buf, count, ppos, buff, desc);
+	kfree(buff);
+	return ret;
+}
+
+static int mt7915_set_vow_sta_dwrr_quantum_id(struct mt7915_dev *dev,
+                                              u32 wcid_id,
+                                              u32 ac, u32 val)
+{
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	int ret;
+
+	wcid = rcu_dereference(dev->mt76.wcid[wcid_id]);
+	if ((!wcid) || (!wcid->sta)) {
+		dev_err(dev->mt76.dev, "%s: error station.\n", __func__);
+		return 0;
+	}
+
+	msta = container_of(wcid, struct mt7915_sta, wcid);
+
+	msta->vow_sta_cfg.dwrr_quantum[ac] = val;
+
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, msta, VOW_DRR_STA_AC0_QUA_ID + ac);
+	dev_info(dev->mt76.dev, "%s: set sta %d, ac %d, quantum id %u.\n",
+                 __func__, wcid_id, ac, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_atf_en(struct mt7915_dev *dev, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_atf_en = !!val;
+	dev->vow_cfg.sta_max_wait_time = val ? 0x40 : 0x1;
+	ret = mt7915_mcu_set_vow_feature_ctrl(dev);
+        dev_info(dev->mt76.dev, "%s: set vow_atf_en %u.\n",
+                 __func__, val);
+
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+                                          VOW_DRR_AIRTIME_DEFICIT_BOUND);
+	dev_info(dev->mt76.dev, "%s: set vow_dwrr_max_wait_time %u.\n",
+                 __func__, dev->vow_cfg.sta_max_wait_time);
+
+	return ret;
+}
+
+static int mt7915_set_vow_dwrr_max_wait_time(struct mt7915_dev *dev,
+                                             u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.sta_max_wait_time = val;
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+		                          VOW_DRR_AIRTIME_DEFICIT_BOUND);
+	dev_info(dev->mt76.dev, "%s: set vow_dwrr_max_wait_time %u.\n",
+		 __func__, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_watf_en(struct mt7915_dev *dev, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_watf_en = !!val;
+	ret = mt7915_mcu_set_vow_feature_ctrl(dev);
+	dev_info(dev->mt76.dev, "%s: set vow_watf_en %u.\n", __func__, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_watf_quantum(struct mt7915_dev *dev,
+                                       u32 id, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_sta_dwrr_quantum[id] = val;
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+				          VOW_DRR_AIRTIME_QUANTUM_L0 + id);
+	dev_info(dev->mt76.dev, "%s: set quantum id %u, val %d.\n",
+                 __func__, id, val);
+
+	return ret;
+}
+
+extern int mt7915_vow_pleinfo_read(struct mt7915_dev *dev);
+static void mt7915_show_station_tx_airtime(struct work_struct *work){
+	struct mt7915_dev *dev = container_of(work, struct mt7915_dev,
+					      vow_work.work);
+	static u32 vow_last_tx_time[MT7916_WTBL_SIZE];
+	struct ieee80211_sta *ieee80211_sta;
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	int idx = 0;
+	int i = 0;
+	u32 addr;
+	int tx_airtime_sum = 0;
+	int tx_add_airtime = 0;
+
+	if (!dev->vow_cfg.vow_show_en)
+		return;
+
+	rcu_read_lock();
+	for (idx = 1; (idx < dev->vow_cfg.vow_show_sta) &&
+	     (idx < MT7915_WTBL_STA); idx++) {
+		if (idx >= ARRAY_SIZE(dev->mt76.wcid))
+			return;
+
+		wcid = rcu_dereference(dev->mt76.wcid[idx]);
+		if (!wcid || !wcid->sta)
+			continue;
+
+		msta = container_of(wcid, struct mt7915_sta, wcid);
+		addr = mt7915_mac_wtbl_lmac_addr(dev, idx, 20);
+		tx_airtime_sum = 0;
+
+		for (i = 0; i < IEEE80211_NUM_ACS; i++) {
+			tx_airtime_sum += mt76_rr(dev, addr);
+			addr += 8;
+		}
+		tx_add_airtime = tx_airtime_sum - vow_last_tx_time[idx];
+		vow_last_tx_time[idx] = tx_airtime_sum;
+
+		ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+					     drv_priv);
+
+		dev_info(dev->mt76.dev, "sta%u:" MACSTR " tx -> %u)\n",
+                         idx, MAC2STR(ieee80211_sta->addr), tx_add_airtime);
+	}
+	mt7915_vow_pleinfo_read(dev);
+	ieee80211_queue_delayed_work(mt76_hw(dev), &dev->vow_work, 1 * HZ);
+	rcu_read_unlock();
+	return;
+}
+
+
+static int mt7915_set_vow_show_en(struct mt7915_dev *dev, u32 val)
+{
+	if (!!dev->vow_cfg.vow_show_en == !!val)
+		return 0;
+	dev->vow_cfg.vow_show_en = val;
+	mt7915_mcu_set_vow_feature_ctrl(dev);
+	if (dev->vow_cfg.vow_show_en) {
+		INIT_DELAYED_WORK(&dev->vow_work, mt7915_show_station_tx_airtime);
+		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->vow_work, 1 * HZ);
+	}
+	else {
+		cancel_delayed_work_sync(&dev->vow_work);
+	}
+	return 0;
+}
+
+static int mt7915_set_vow_show_sta(struct mt7915_dev *dev, u32 val)
+{
+	dev->vow_cfg.vow_show_sta = val;
+	dev_info(dev->mt76.dev, "%s: show station up to %d.\n",
+		 __func__, dev->vow_cfg.vow_show_sta);
+	return 0;
+}
+static int mt7915_set_show_vow_info(struct mt7915_dev *dev)
+{
+	dev_info(dev->mt76.dev, "====== VOW Control Information ======\n");
+	dev_info(dev->mt76.dev, "ATF Enable: %d\n",
+                 dev->vow_cfg.vow_atf_en);
+	dev_info(dev->mt76.dev, "WATF Enable: %d\n",
+                 dev->vow_cfg.vow_watf_en);
+	dev_info(dev->mt76.dev, "refill_period: %d\n",
+                 dev->vow_cfg.refill_period);
+	dev_info(dev->mt76.dev, "===== VOW Max Deficit Information =====\n");
+	dev_info(dev->mt76.dev, "VOW Max Deficit(unit 256us): %d\n",
+                 dev->vow_cfg.sta_max_wait_time);
+	dev_info(dev->mt76.dev, "===== VOW Quantum Information =====\n");
+	dev_info(dev->mt76.dev, "Quantum ID 0 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[0]);
+	dev_info(dev->mt76.dev, "Quantum ID 1 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[1]);
+	dev_info(dev->mt76.dev, "Quantum ID 2 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[2]);
+	dev_info(dev->mt76.dev, "Quantum ID 3 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[3]);
+	return 0;
+}
+
+static int mt7915_show_vow_sta_conf(struct mt7915_dev *dev, u32 val)
+{
+	struct ieee80211_sta *ieee80211_sta;
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	u32 i;
+	u8 q;
+
+	if (val > 0 && val < MT7915_WTBL_STA) {
+		wcid = rcu_dereference(dev->mt76.wcid[val]);
+		if (!wcid || !wcid->sta)
+			return 0;
+		msta = container_of(wcid, struct mt7915_sta, wcid);
+		ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+					     drv_priv);
+		dev_info(dev->mt76.dev, "%s: ****** sta%d: "MACSTR"******\n",
+			 __func__, val, MAC2STR(ieee80211_sta->addr));
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO];
+		dev_info(dev->mt76.dev, "Ac0 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI];
+		dev_info(dev->mt76.dev, "Ac1 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE];
+		dev_info(dev->mt76.dev, "Ac2 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK];
+		dev_info(dev->mt76.dev, "Ac3 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+	}
+	else{
+		for (i = 1; i < MT7915_WTBL_STA; i++) {
+			wcid = rcu_dereference(dev->mt76.wcid[i]);
+			if (!wcid || !wcid->sta)
+				continue;
+			msta = container_of(wcid, struct mt7915_sta, wcid);
+			ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+						     drv_priv);
+			dev_info(dev->mt76.dev, "%s: ****** sta%d: "MACSTR"******\n",
+				 __func__, i, MAC2STR(ieee80211_sta->addr));
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO];
+			dev_info(dev->mt76.dev, "Ac0 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI];
+			dev_info(dev->mt76.dev, "Ac1 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE];
+			dev_info(dev->mt76.dev, "Ac2 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK];
+			dev_info(dev->mt76.dev, "Ac3 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		}
+	}
+	return 0;
+}
+
+static ssize_t
+mt7915_vow_set(struct file *file, const char __user *user_buf,
+	       size_t count, loff_t *ppos)
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct mt7915_dev *dev = phy->dev;
+	u32 param1, param2, param3;
+	char buf[64];
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (!strncmp(buf, "vow_sta_dwrr_quantum_id", strlen("vow_sta_dwrr_quantum_id"))) {
+		ret = sscanf(buf, "vow_sta_dwrr_quantum_id=%u-%u-%u",
+		             &param1, &param2, &param3);
+		if (ret != 3 || param2 >= IEEE80211_NUM_ACS || param3 >= VOW_WATF_LEVEL_NUM)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_sta_dwrr_quantum_id(dev, param1, param2, param3);
+	} else if (!strncmp(buf, "vow_atf_en", strlen("vow_atf_en"))) {
+		ret = sscanf(buf, "vow_atf_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_atf_en(dev, param1);
+	} else if (!strncmp(buf, "vow_dwrr_max_wait_time", strlen("vow_dwrr_max_wait_time"))) {
+		ret = sscanf(buf, "vow_dwrr_max_wait_time=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_dwrr_max_wait_time(dev, param1);
+	} else if (!strncmp(buf, "vow_watf_en", strlen("vow_watf_en"))) {
+		ret = sscanf(buf, "vow_watf_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_watf_en(dev, param1);
+	} else if (!strncmp(buf, "vow_watf_quantum", strlen("vow_watf_quantum"))) {
+		ret = sscanf(buf, "vow_watf_quantum=%u-%u", &param1, &param2);
+		if (!dev->vow_cfg.vow_watf_en || ret != 2 || param1 >= VOW_WATF_LEVEL_NUM)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_watf_quantum(dev, param1, param2);
+	} else if (!strncmp(buf, "vow_show_en", strlen("vow_show_en"))) {
+		ret = sscanf(buf, "vow_show_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_show_en(dev, param1);
+	} else if (!strncmp(buf, "vow_show_sta", strlen("vow_show_sta"))) {
+		ret = sscanf(buf, "vow_show_sta=%u", &param1);
+		if (ret != 1 || param1 >= MT7915_WTBL_STA)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_show_sta(dev, param1);
+	} else if (!strncmp(buf, "show_vow_info", strlen("show_vow_info")))
+		ret = mt7915_set_show_vow_info(dev);
+	else if (!strncmp(buf, "show_vow_sta_conf", strlen("show_vow_sta_conf"))) {
+		ret = sscanf(buf, "show_vow_sta_conf=%u", &param1);
+		if (ret != 1 || param1 >= MT7915_WTBL_STA)
+			return -EINVAL;
+
+		ret = mt7915_show_vow_sta_conf(dev, param1);
+	} else
+		return -EINVAL;
+
+	return ret ? ret : count;
+}
+
+static const struct file_operations mt7915_vow_ops = {
+	.write = mt7915_vow_set,
+	.read = mt7915_vow_get,
 	.open = simple_open,
 	.llseek = default_llseek,
 };
@@ -1531,6 +1890,7 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
 				    mt7915_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
+	debugfs_create_file("vow", 0600, dir, phy, &mt7915_vow_ops);
 
 	if (!dev->dbdc_support || phy->mt76->band_idx) {
 		debugfs_create_u32("dfs_hw_pattern", 0400, dir,

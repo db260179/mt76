@@ -606,9 +606,64 @@ mt7915_init_led_mux(struct mt7915_dev *dev)
 	}
 }
 
+void mt7915_vow_init(struct mt7915_dev *dev)
+{
+	struct mt7915_vow_cfg *vow_cfg = &dev->vow_cfg;
+	bool ret;
+	int i;
+
+	if (!(is_mt7915(&dev->mt76)))
+		vow_cfg->vow_feature |= VOW_FEATURE_BWCG;
+
+	vow_cfg->vow_atf_en = 0x1;
+	vow_cfg->sta_max_wait_time = 0x40;
+	vow_cfg->refill_period = 0x5;
+
+	vow_cfg->vow_sta_dwrr_quantum[0] = 0x06;
+	vow_cfg->vow_sta_dwrr_quantum[1] = 0x0c;
+	vow_cfg->vow_sta_dwrr_quantum[2] = 0x10;
+	vow_cfg->vow_sta_dwrr_quantum[3] = 0x14;
+	vow_cfg->vow_sta_dwrr_quantum[4] = 0x18;
+	vow_cfg->vow_sta_dwrr_quantum[5] = 0x1c;
+	vow_cfg->vow_sta_dwrr_quantum[6] = 0x20;
+	vow_cfg->vow_sta_dwrr_quantum[7] = 0x24;
+
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+					  VOW_DRR_AIRTIME_DEFICIT_BOUND);
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+					  VOW_DRR_AIRTIME_QUANTUM_ALL);
+
+	for(i = 0; i < 4; i++)
+		ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+						  VOW_DRR_AIRTIME_QUANTUM_L0 + i);
+
+	ret = mt7915_mcu_set_vow_feature_ctrl(dev);
+	return;
+}
+
+/* Assignment of BSS group index aligns FW.
+ * 0: Band 0 - BSS 0
+ * 4: Band 1 - BSS 0
+ * 9..23: Band 0 - BSS 0x11..0x1f
+ * 25..39: Band 1 - BSS 0x11..0x1f
+ */
+void mt7915_vow_init_sta_bss_grp(struct mt7915_sta *sta)
+{
+	const u8 hw_bssid_num = HW_BSSID_MAX + 1;
+	struct mt76_vif_link *vif = &sta->vif->mt76;
+
+	if (vif->omac_idx < hw_bssid_num)
+		sta->vow_sta_cfg.bss_grp_idx = vif->band_idx * hw_bssid_num + vif->omac_idx;
+	else { /* Extended BSS */
+		u8 ext_bss_ofs = hw_bssid_num * 2 + (vif->band_idx == 0 ? 1 : 17);
+		sta->vow_sta_cfg.bss_grp_idx = ext_bss_ofs + vif->omac_idx - EXT_BSSID_1;
+	}
+}
+
 void mt7915_mac_init(struct mt7915_dev *dev)
 {
 	int i;
+	struct wiphy *wiphy = dev->phy.mt76->hw->wiphy;
 
 	/* config pse qid6 wfdma port selection */
 	if (!is_mt7915(&dev->mt76) && dev->hif2)
@@ -627,6 +682,9 @@ void mt7915_mac_init(struct mt7915_dev *dev)
 		mt7915_mac_init_band(dev, i);
 
 	mt7915_init_led_mux(dev);
+
+	if (mt7915_is_atf_default_on(wiphy, dev))
+		mt7915_vow_init(dev);
 }
 
 int mt7915_txbf_init(struct mt7915_dev *dev)

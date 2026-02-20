@@ -1518,6 +1518,136 @@ static void chip_get_sta_pause(struct mt7915_dev *dev, u32 *sta_pause)
 	}
 }
 
+u32 vow_chip_show_sta_acq_info(struct mt7915_dev *dev, u32 *ple_stat,
+			       u32 *sta_pause, u32 *dis_sta_map,
+			       u32 dumptxd)
+{
+	int i, j;
+	u32 total_nonempty_cnt = 0;
+	u32 ac_num = 9, all_ac_num;
+	static char* sta_ctrl_reg[] = {"ENABLE", "DISABLE", "PAUSE"};
+	if (!is_mt7915(&dev->mt76))
+		ac_num = 17;
+
+	all_ac_num = ac_num * 4;
+
+	for (j = 0; j < all_ac_num; j++) { /* show AC Q info */
+		for (i = 0; i < 32; i++) {
+			if (((ple_stat[j + 1] & (0x1 << i)) >> i) == 0) {
+				u32 hfid, tfid, pktcnt, ac_n = j / ac_num, ctrl = 0;
+				u32 sta_num = i + (j % ac_num) * 32, fl_que_ctrl[3] = {0};
+				u32 wmmidx = 0;
+				struct mt7915_sta *msta;
+				struct mt76_wcid *wcid;
+
+				wcid = rcu_dereference(dev->mt76.wcid[sta_num]);
+				if (!wcid) {
+					printk("ERROR!! no found STA wcid=%d\n", sta_num);
+					continue;
+				}
+				msta = container_of(wcid, struct mt7915_sta, wcid);
+				wmmidx = msta->vif->mt76.wmm_idx;
+
+				dev_info(dev->mt76.dev, "\tSTA%d AC%d: ", sta_num, ac_n);
+
+				fl_que_ctrl[0] |= MT_DBG_PLE_FL_QUE_CTRL0_EXECUTE_MASK;
+				fl_que_ctrl[0] |= (ENUM_UMAC_LMAC_PORT_2 <<
+						   MT_PLE_FL_QUE_CTRL0_Q_BUF_PID_SHFT);
+				fl_que_ctrl[0] |= (ac_n << MT_PLE_FL_QUE_CTRL0_Q_BUF_QID_SHFT);
+				fl_que_ctrl[0] |= sta_num;
+				mt76_wr(dev, MT_DBG_PLE_FL_QUE_CTRL0, fl_que_ctrl[0]);
+				fl_que_ctrl[1] = mt76_rr(dev, MT_DBG_PLE_FL_QUE_CTRL2);
+				fl_que_ctrl[2] = mt76_rr(dev, MT_DBG_PLE_FL_QUE_CTRL3);
+				hfid = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL2_Q_HEAD_FID_MASK,
+						 fl_que_ctrl[1]);
+				tfid = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL2_Q_TAIL_FID_MASK,
+						 fl_que_ctrl[1]);
+				pktcnt = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL3_Q_PKT_NUM_MASK,
+						   fl_que_ctrl[2]);
+				dev_info(dev->mt76.dev, "tail/head fid = 0x%03x/0x%03x, pkt cnt = 0x%03x",
+					 tfid, hfid, pktcnt);
+
+				if (((sta_pause[j % ac_num] & 0x1 << i) >> i) == 1)
+					ctrl = 2;
+
+				if (((dis_sta_map[j % ac_num] & 0x1 << i) >> i) == 1)
+					ctrl = 1;
+
+				dev_info(dev->mt76.dev, " ctrl = %s", sta_ctrl_reg[ctrl]);
+				dev_info(dev->mt76.dev, " (wmmidx=%d)\n", wmmidx);
+
+				total_nonempty_cnt++;
+			}
+		}
+	}
+
+	return total_nonempty_cnt;
+}
+
+int mt7915_vow_pleinfo_read(struct mt7915_dev *dev)
+{
+	u32 ple_stat[70] = {0}, pg_flow_ctrl[8] = {0};
+	u32 ple_txcmd_stat;
+	u32 sta_pause[CR_NUM_OF_AC] = {0}, dis_sta_map[CR_NUM_OF_AC] = {0};
+	int i;
+
+	chip_get_ple_acq_stat(dev, ple_stat);
+	ple_txcmd_stat = mt76_rr(dev, MT_DBG_PLE_TXCMD_Q_EMPTY);
+	pg_flow_ctrl[0] = mt76_rr(dev, MT_DBG_PLE_FREEPG_CNT);
+	pg_flow_ctrl[1] = mt76_rr(dev, MT_DBG_PLE_FREEPG_HEAD_TAIL);
+	pg_flow_ctrl[2] = mt76_rr(dev, MT_DBG_PLE_PG_HIF_GROUP);
+	pg_flow_ctrl[3] = mt76_rr(dev, MT_DBG_PLE_HIF_PG_INFO);
+	pg_flow_ctrl[4] = mt76_rr(dev, MT_DBG_PLE_PG_CPU_GROUP);
+	pg_flow_ctrl[5] = mt76_rr(dev, MT_DBG_PLE_CPU_PG_INFO);
+	pg_flow_ctrl[6] = mt76_rr(dev, MT_DBG_PLE_PG_HIF_TXCMD_GROUP);
+	pg_flow_ctrl[7] = mt76_rr(dev, MT_DBG_PLE_HIF_TXCMD_PG_INFO);
+	chip_get_dis_sta_map(dev, dis_sta_map);
+	chip_get_sta_pause(dev, sta_pause);
+
+	dev_info(dev->mt76.dev, "PLE Configuration Info:\n");
+
+	for (i = 0; i < 32; i++) {
+		if (((ple_stat[0] & (0x1 << i)) >> i) == 0) {
+			u32 hfid, tfid, pktcnt, fl_que_ctrl[3] = {0};
+
+			if (ple_queue_empty_info[i].QueueName != NULL) {
+				fl_que_ctrl[0] |= MT_DBG_PLE_FL_QUE_CTRL0_EXECUTE_MASK;
+				fl_que_ctrl[0] |= (ple_queue_empty_info[i].Portid <<
+						   MT_PLE_FL_QUE_CTRL0_Q_BUF_PID_SHFT);
+				fl_que_ctrl[0] |= (ple_queue_empty_info[i].Queueid <<
+						   MT_PLE_FL_QUE_CTRL0_Q_BUF_QID_SHFT);
+			} else
+				continue;
+
+			if (ple_queue_empty_info[i].Queueid >=
+			    ENUM_UMAC_LMAC_PLE_TX_Q_ALTX_0 &&
+		            ple_queue_empty_info[i].Queueid <=
+			    ENUM_UMAC_LMAC_PLE_TX_Q_PSMP_0)
+			    /* band0 set TGID 0, bit31 = 0 */
+			    mt76_wr(dev, MT_DBG_PLE_FL_QUE_CTRL1, 0x0);
+			else if (ple_queue_empty_info[i].Queueid >=
+				 ENUM_UMAC_LMAC_PLE_TX_Q_ALTX_1 &&
+				 ple_queue_empty_info[i].Queueid <=
+				 ENUM_UMAC_LMAC_PLE_TX_Q_PSMP_1)
+				/* band1 set TGID 1, bit31 = 1 */
+				mt76_wr(dev, MT_DBG_PLE_FL_QUE_CTRL1, 0x80000000);
+
+			mt76_wr(dev, MT_DBG_PLE_FL_QUE_CTRL0, fl_que_ctrl[0]);
+			fl_que_ctrl[1] = mt76_rr(dev, MT_DBG_PLE_FL_QUE_CTRL2);
+			fl_que_ctrl[2] = mt76_rr(dev, MT_DBG_PLE_FL_QUE_CTRL3);
+			hfid = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL2_Q_HEAD_FID_MASK,
+					 fl_que_ctrl[1]);
+			tfid = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL2_Q_TAIL_FID_MASK,
+					 fl_que_ctrl[1]);
+			pktcnt = FIELD_GET(MT_DBG_PLE_FL_QUE_CTRL3_Q_PKT_NUM_MASK,
+					   fl_que_ctrl[2]);
+		}
+	}
+
+	vow_chip_show_sta_acq_info(dev, ple_stat, sta_pause, dis_sta_map, 0);
+
+	return 0;
+}
 static int mt7915_pleinfo_read(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
