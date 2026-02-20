@@ -4528,6 +4528,13 @@ void mt7915_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
 		if (val == 0)
 			phy->muru_onoff = MUMIMO_DL_CERT | MUMIMO_DL;
 		break;
+	case RATE_PARAM_AUTO_MU:
+		if (val < 0 || val > 15) {
+			printk("Wrong value! The value is between 0-15.\n");
+			break;
+		}
+		phy->muru_onoff = val;
+		break;
 	}
 }
 
