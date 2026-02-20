@@ -1240,6 +1240,8 @@ int mt7915_register_device(struct mt7915_dev *dev)
 	mutex_init(&dev->dump_mutex);
 	mutex_init(&dev->qctrl_mutex);
 
+	INIT_WORK(&dev->wmm_pbc_work, mt7915_mcu_wmm_pbc_work);
+
 	dev->dbdc_support = mt7915_band_config(dev);
 
 	phy2 = mt7915_alloc_ext_phy(dev);
