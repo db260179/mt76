@@ -4503,20 +4503,22 @@ int mt7915_mcu_twt_agrt_update(struct mt7915_dev *dev,
 		.own_mac_idx = mvif->mt76.omac_idx,
 		.flowid = flow->id,
 		.peer_id = cpu_to_le16(flow->wcid),
-		.duration = flow->duration,
 		.bss_idx = mvif->mt76.idx,
-		.start_tsf = cpu_to_le64(flow->tsf),
-		.mantissa = flow->mantissa,
-		.exponent = flow->exp,
 		.is_ap = true,
 	};
 
-	if (flow->protection)
-		req.agrt_params |= TWT_AGRT_PROTECT;
-	if (!flow->flowtype)
-		req.agrt_params |= TWT_AGRT_ANNOUNCE;
-	if (flow->trigger)
-		req.agrt_params |= TWT_AGRT_TRIGGER;
+	if (cmd == MCU_TWT_AGRT_ADD) {
+		req.start_tsf = cpu_to_le64(flow->tsf);
+		req.mantissa = flow->mantissa;
+		req.exponent = flow->exp;
+		req.duration = flow->duration;
+		if (flow->protection)
+			req.agrt_params |= TWT_AGRT_PROTECT;
+		if (!flow->flowtype)
+			req.agrt_params |= TWT_AGRT_ANNOUNCE;
+		if (flow->trigger)
+			req.agrt_params |= TWT_AGRT_TRIGGER;
+	}
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(TWT_AGRT_UPDATE),
 				 &req, sizeof(req), true);
