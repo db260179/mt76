@@ -6,6 +6,8 @@
 #define __MT76_TESTMODE_H
 
 #define MT76_TM_TIMEOUT	10
+#define MT76_TM_MAX_ENTRY_NUM	16
+#define MT76_TM_EEPROM_BLOCK_SIZE	16
 
 /**
  * enum mt76_testmode_attr - testmode attributes inside NL80211_ATTR_TESTDATA
@@ -18,6 +20,7 @@
  * @MT76_TM_ATTR_MTD_PART: mtd partition used for eeprom data (string)
  * @MT76_TM_ATTR_MTD_OFFSET: offset of eeprom data within the partition (u32)
  *
+ * @MT76_TM_ATTR_SKU_EN: config txpower sku is enabled or disabled in testmode (u8)
  * @MT76_TM_ATTR_TX_COUNT: configured number of frames to send when setting
  *	state to MT76_TM_STATE_TX_FRAMES (u32)
  * @MT76_TM_ATTR_TX_PENDING: pending frames during MT76_TM_STATE_TX_FRAMES (u32)
@@ -47,6 +50,15 @@
  * @MT76_TM_ATTR_DRV_DATA: driver specific netlink attrs (nested)
  *
  * @MT76_TM_ATTR_MAC_ADDRS: array of nested MAC addresses (nested)
+ *
+ * @MT76_TM_ATTR_EEPROM_ACTION: eeprom setting actions
+ *	(u8, see &enum mt76_testmode_eeprom_action)
+ * @MT76_TM_ATTR_EEPROM_OFFSET: offset of eeprom data block for writing (u32)
+ * @MT76_TM_ATTR_EEPROM_VAL: values for writing into a 16-byte data block
+ *	(nested, u8 attrs)
+ *
+ * @MT76_TM_ATTR_CFG: config testmode rf feature (nested, see &mt76_testmode_cfg)
+ *
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -57,6 +69,7 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_MTD_PART,
 	MT76_TM_ATTR_MTD_OFFSET,
 
+	MT76_TM_ATTR_SKU_EN,
 	MT76_TM_ATTR_TX_COUNT,
 	MT76_TM_ATTR_TX_LENGTH,
 	MT76_TM_ATTR_TX_RATE_MODE,
@@ -84,6 +97,17 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_DRV_DATA,
 
 	MT76_TM_ATTR_MAC_ADDRS,
+	MT76_TM_ATTR_AID,
+	MT76_TM_ATTR_RU_ALLOC,
+	MT76_TM_ATTR_RU_IDX,
+
+	MT76_TM_ATTR_EEPROM_ACTION,
+	MT76_TM_ATTR_EEPROM_OFFSET,
+	MT76_TM_ATTR_EEPROM_VAL,
+
+	MT76_TM_ATTR_CFG,
+	MT76_TM_ATTR_TXBF_ACT,
+	MT76_TM_ATTR_TXBF_PARAM,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -128,6 +152,7 @@ enum mt76_testmode_stats_attr {
  *
  * @MT76_TM_RX_ATTR_FREQ_OFFSET: frequency offset (s32)
  * @MT76_TM_RX_ATTR_RCPI: received channel power indicator (array, u8)
+ * @MT76_TM_RX_ATTR_RSSI: received signal strength indicator (array, s8)
  * @MT76_TM_RX_ATTR_IB_RSSI: internal inband RSSI (array, s8)
  * @MT76_TM_RX_ATTR_WB_RSSI: internal wideband RSSI (array, s8)
  * @MT76_TM_RX_ATTR_SNR: signal-to-noise ratio (u8)
@@ -137,6 +162,7 @@ enum mt76_testmode_rx_attr {
 
 	MT76_TM_RX_ATTR_FREQ_OFFSET,
 	MT76_TM_RX_ATTR_RCPI,
+	MT76_TM_RX_ATTR_RSSI,
 	MT76_TM_RX_ATTR_IB_RSSI,
 	MT76_TM_RX_ATTR_WB_RSSI,
 	MT76_TM_RX_ATTR_SNR,
@@ -194,6 +220,59 @@ enum mt76_testmode_tx_mode {
 	/* keep last */
 	NUM_MT76_TM_TX_MODES,
 	MT76_TM_TX_MODE_MAX = NUM_MT76_TM_TX_MODES - 1,
+};
+
+/**
+ * enum mt76_testmode_eeprom_action - eeprom setting actions
+ *
+ * @MT76_TM_EEPROM_ACTION_UPDATE_DATA: update rf values to specific
+ *	eeprom data block
+ * @MT76_TM_EEPROM_ACTION_UPDATE_BUFFER_MODE: send updated eeprom data to fw
+ * @MT76_TM_EEPROM_ACTION_WRITE_TO_EFUSE: write eeprom data back to efuse
+ */
+enum mt76_testmode_eeprom_action {
+	MT76_TM_EEPROM_ACTION_UPDATE_DATA,
+	MT76_TM_EEPROM_ACTION_UPDATE_BUFFER_MODE,
+	MT76_TM_EEPROM_ACTION_WRITE_TO_EFUSE,
+
+	/* keep last */
+	NUM_MT76_TM_EEPROM_ACTION,
+	MT76_TM_EEPROM_ACTION_MAX = NUM_MT76_TM_EEPROM_ACTION - 1,
+};
+
+/**
+ * enum mt76_testmode_cfg - packet tx phy mode
+ *
+ * @MT76_TM_EEPROM_ACTION_UPDATE_DATA: update rf values to specific
+ *	eeprom data block
+ * @MT76_TM_EEPROM_ACTION_UPDATE_BUFFER_MODE: send updated eeprom data to fw
+ * @MT76_TM_EEPROM_ACTION_WRITE_TO_EFUSE: write eeprom data back to efuse
+ */
+enum mt76_testmode_cfg {
+	MT76_TM_CFG_TSSI,
+	MT76_TM_CFG_DPD,
+	MT76_TM_CFG_RATE_POWER_OFFSET,
+	MT76_TM_CFG_THERMAL_COMP,
+
+	/* keep last */
+	NUM_MT76_TM_CFG,
+	MT76_TM_CFG_MAX = NUM_MT76_TM_CFG - 1,
+};
+
+enum mt76_testmode_txbf_act {
+	MT76_TM_TXBF_ACT_INIT,
+	MT76_TM_TXBF_ACT_UPDATE_CH,
+	MT76_TM_TXBF_ACT_PHASE_COMP,
+	MT76_TM_TXBF_ACT_TX_PREP,
+	MT76_TM_TXBF_ACT_IBF_PROF_UPDATE,
+	MT76_TM_TXBF_ACT_EBF_PROF_UPDATE,
+	MT76_TM_TXBF_ACT_PHASE_CAL,
+	MT76_TM_TXBF_ACT_PROF_UPDATE_ALL,
+	MT76_TM_TXBF_ACT_E2P_UPDATE,
+
+	/* keep last */
+	NUM_MT76_TM_TXBF_ACT,
+	MT76_TM_TXBF_ACT_MAX = NUM_MT76_TM_TXBF_ACT - 1,
 };
 
 #endif

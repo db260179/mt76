@@ -404,6 +404,8 @@ void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
 	case NL80211_IFTYPE_MESH_POINT:
 	case NL80211_IFTYPE_AP:
 		if (vif->p2p && !is_connac2(dev))
+	case NL80211_IFTYPE_MONITOR:
+		if (vif->p2p && !is_mt7921(dev))
 			conn_type = CONNECTION_P2P_GC;
 		else
 			conn_type = CONNECTION_INFRA_STA;
@@ -583,6 +585,9 @@ void mt76_connac_mcu_wtbl_generic_tlv(struct mt76_dev *dev,
 	rx->rca1 = sta ? vif->type != NL80211_IFTYPE_AP : 1;
 	rx->rca2 = 1;
 	rx->rv = 1;
+
+	if (vif->type == NL80211_IFTYPE_MONITOR)
+		rx->rca1 = 0;
 
 	if (!is_connac_v1(dev))
 		return;

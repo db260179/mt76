@@ -320,11 +320,15 @@ struct mt7915_phy {
 
 		s32 last_freq_offset;
 		u8 last_rcpi[4];
+		s8 last_rssi[4];
 		s8 last_ib_rssi[4];
 		s8 last_wb_rssi[4];
 		u8 last_snr;
 
 		u8 spe_idx;
+
+		bool bf_en;
+		bool bf_ever_en;
 	} test;
 #endif
 
@@ -440,6 +444,14 @@ struct mt7915_dev {
 	struct reset_control *rstc;
 	void __iomem *dcm;
 	void __iomem *sku;
+
+#ifdef CONFIG_NL80211_TESTMODE
+	struct {
+		void *txbf_phase_cal;
+		void *txbf_pfmu_data;
+		void *txbf_pfmu_tag;
+	} test;
+#endif
 
 #ifdef MTK_DEBUG
 	u16 wlan_idx;
@@ -646,7 +658,7 @@ int mt7915_mcu_set_fixed_rate_ctrl(struct mt7915_dev *dev,
 				   struct ieee80211_sta *sta,
 				   struct mt76_wcid *wcid,
 				   void *data, u32 field);
-int mt7915_mcu_set_eeprom(struct mt7915_dev *dev);
+int mt7915_mcu_set_eeprom(struct mt7915_dev *dev, bool flash_mode);
 int mt7915_mcu_get_eeprom(struct mt7915_dev *dev, u8 *buf, u32 offset);
 int mt7915_mcu_get_eeprom_free_block(struct mt7915_dev *dev, u8 *block_num);
 int mt7915_mcu_set_mac(struct mt7915_dev *dev, int band, bool enable,
@@ -686,6 +698,7 @@ int mt7915_mcu_fw_log_2_host(struct mt7915_dev *dev, u8 type, u8 ctrl);
 int mt7915_mcu_fw_dbg_ctrl(struct mt7915_dev *dev, u32 module, u8 level);
 void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_exit(struct mt7915_dev *dev);
+int mt7915_tm_txbf_status_read(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_wmm_pbc_work(struct work_struct *work);
 
 static inline u16 mt7915_wtbl_size(struct mt7915_dev *dev)
