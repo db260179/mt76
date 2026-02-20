@@ -415,6 +415,7 @@ struct mt7915_dev {
 
 	u32 hw_pattern;
 
+	bool limited_wtbl_size;
 	bool dbdc_support;
 	bool flash_mode;
 	bool bin_file_mode;
@@ -711,7 +712,11 @@ void mt7915_tm_rf_test_event(struct mt7915_dev *dev, struct sk_buff *skb);
 
 static inline u16 mt7915_wtbl_size(struct mt7915_dev *dev)
 {
-	return is_mt7915(&dev->mt76) ? MT7915_WTBL_SIZE : MT7916_WTBL_SIZE;
+	if (is_mt7915(&dev->mt76) ||
+	    (is_mt7981(&dev->mt76) && dev->limited_wtbl_size))
+		return MT7915_WTBL_SIZE;
+
+	return MT7916_WTBL_SIZE;
 }
 
 static inline u16 mt7915_eeprom_size(struct mt7915_dev *dev)
