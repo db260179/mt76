@@ -1510,6 +1510,9 @@ void mt7915_mac_reset_work(struct work_struct *work)
 	if (!(READ_ONCE(dev->recovery.state) & MT_MCU_CMD_STOP_DMA))
 		return;
 
+	dev_info(dev->mt76.dev,"\n%s L1 SER recovery start.",
+		 wiphy_name(dev->mt76.hw->wiphy));
+
 	ieee80211_stop_queues(mt76_hw(dev));
 	if (ext_phy)
 		ieee80211_stop_queues(ext_phy->hw);
@@ -1590,6 +1593,9 @@ void mt7915_mac_reset_work(struct work_struct *work)
 		ieee80211_queue_delayed_work(ext_phy->hw,
 					     &phy2->mt76->mac_work,
 					     MT7915_WATCHDOG_TIME);
+
+	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
+		 wiphy_name(dev->mt76.hw->wiphy));
 }
 
 /* firmware coredump */
@@ -1664,6 +1670,9 @@ skip_coredump:
 
 void mt7915_reset(struct mt7915_dev *dev)
 {
+	dev_info(dev->mt76.dev, "%s SER recovery state: 0x%08x\n",
+		 wiphy_name(dev->mt76.hw->wiphy), READ_ONCE(dev->recovery.state));
+
 	if (!dev->recovery.hw_init_done)
 		return;
 
