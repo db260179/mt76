@@ -1845,7 +1845,7 @@ mt7915_mcu_add_group(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 {
 #define MT_STA_BSS_GROUP		1
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
-	struct mt7915_sta *msta;
+	struct mt7915_sta *msta = sta ? (struct mt7915_sta *)sta->drv_priv : &mvif->sta;
 	struct {
 		__le32 action;
 		u8 wlan_idx_lo;
@@ -1856,10 +1856,9 @@ mt7915_mcu_add_group(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 		u8 rsv1[8];
 	} __packed req = {
 		.action = cpu_to_le32(MT_STA_BSS_GROUP),
-		.val = cpu_to_le32(mvif->mt76.idx % 16),
+		.val = cpu_to_le32(msta->vow_sta_cfg.bss_grp_idx)
 	};
 
-	msta = sta ? (struct mt7915_sta *)sta->drv_priv : &mvif->sta;
 	req.wlan_idx_lo = to_wcid_lo(msta->wcid.idx);
 	req.wlan_idx_hi = to_wcid_hi(msta->wcid.idx);
 
@@ -1924,6 +1923,7 @@ int __mt7915_mcu_add_sta(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 		mt7915_mcu_sta_bfee_tlv(dev, skb, vif, sta);
 	}
 
+	mt7915_vow_init_sta_bss_grp(msta);
 	ret = mt7915_mcu_add_group(dev, vif, sta);
 	if (ret) {
 		dev_kfree_skb(skb);
@@ -3876,6 +3876,169 @@ int mt7915_mcu_set_ser(struct mt7915_dev *dev, u8 action, u8 set, u8 band)
 	};
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SET_SER_TRIGGER),
+				 &req, sizeof(req), false);
+}
+
+int mt7915_mcu_set_vow_drr_ctrl(struct mt7915_dev *dev,
+                                struct mt7915_sta *msta,
+                                u32 subcmd)
+{
+	u32 setting = 0;
+	u32 i;
+
+	struct {
+		__le32 action;
+		u8 wlan_idx_lo;
+		u8 status;
+		u8 wlan_idx_hi;
+		u8 rsv0[5];
+		union {
+			__le32 com_value;
+			struct {
+				u8 air_time_quantum[VOW_MAX_STA_DWRR_NUM];
+			}air_time_quantum_all;
+		}air_time_ctrl;
+	} __packed req = {
+		.action = cpu_to_le32(subcmd),
+		.wlan_idx_lo = msta ? to_wcid_lo(msta->wcid.idx) : to_wcid_lo(0x0),
+		.wlan_idx_hi = msta ? to_wcid_hi(msta->wcid.idx) : to_wcid_hi(0x0),
+	};
+
+	switch (subcmd) {
+		case VOW_DRR_STA_ALL:{
+			setting |= msta->vow_sta_cfg.bss_grp_idx;
+			setting |= (msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO] << 8);
+			setting |= (msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI] << 12);
+			setting |= (msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE] << 16);
+			setting |= (msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK] << 20);
+			if (dev->vow_cfg.vow_feature & VOW_FEATURE_BWCG)
+                                setting |= ((UMAC_BWC_GROUP_MIN) << 24);
+			req.air_time_ctrl.com_value = cpu_to_le32(setting);
+			break;
+		}
+
+		case VOW_DRR_STA_BSS_GROUP:
+			req.air_time_ctrl.com_value = cpu_to_le32(msta->vow_sta_cfg.bss_grp_idx);
+			break;
+
+		case VOW_DRR_STA_PAUSE_SETTING:
+			req.air_time_ctrl.com_value = cpu_to_le32(msta->vow_sta_cfg.paused);
+			break;
+
+		case VOW_DRR_STA_AC0_QUA_ID:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO]);
+			break;
+
+		case VOW_DRR_STA_AC1_QUA_ID:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI]);
+			break;
+
+		case VOW_DRR_STA_AC2_QUA_ID:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE]);
+			break;
+
+		case VOW_DRR_STA_AC3_QUA_ID:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK]);
+			break;
+
+		case VOW_DRR_AIRTIME_DEFICIT_BOUND:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(dev->vow_cfg.sta_max_wait_time);
+			break;
+
+		case VOW_DRR_AIRTIME_QUANTUM_L0:
+		case VOW_DRR_AIRTIME_QUANTUM_L1:
+		case VOW_DRR_AIRTIME_QUANTUM_L2:
+		case VOW_DRR_AIRTIME_QUANTUM_L3:
+		case VOW_DRR_AIRTIME_QUANTUM_L4:
+		case VOW_DRR_AIRTIME_QUANTUM_L5:
+		case VOW_DRR_AIRTIME_QUANTUM_L6:
+		case VOW_DRR_AIRTIME_QUANTUM_L7:
+			req.air_time_ctrl.com_value =
+				cpu_to_le32(dev->vow_cfg.vow_sta_dwrr_quantum[subcmd -
+				            VOW_DRR_AIRTIME_QUANTUM_L0]);
+			break;
+
+		case VOW_DRR_AIRTIME_QUANTUM_ALL: {
+			for (i = 0; i < VOW_MAX_STA_DWRR_NUM; i++) {
+				req.air_time_ctrl.air_time_quantum_all.air_time_quantum[i] =
+					dev->vow_cfg.vow_sta_dwrr_quantum[i];
+			}
+			break;
+		}
+
+		default:
+			break;
+	}
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SET_DRR_CTRL),
+				 &req, sizeof(req), false);
+}
+
+int mt7915_mcu_set_vow_feature_ctrl(struct mt7915_dev *dev)
+{
+	u16 value = 0;
+	u32 sch_value = 0;
+
+	struct vow_feature_ctrl {
+		__le16 bss_flag;
+		__le16 vow_ctrl_flag;
+		__le16 bss_value[9];
+		__le16 vow_ctrl_val;
+		__le16 time_token_value[2];
+                __le16 length_token_value[2];
+		__le32 tx_ctrl;
+		__le32 sch_ctrl;
+	} __packed req = {
+		.bss_flag = cpu_to_le16(0xffff),
+		.vow_ctrl_flag = cpu_to_le16(0xf231),
+		.bss_value[0] = cpu_to_le16(0xffff),
+		.bss_value[2] = cpu_to_le16(0xffff),
+		.bss_value[8] = cpu_to_le16(0xffff),
+		.time_token_value[0] = cpu_to_le16(0xffff),
+	};
+
+	value |= dev->vow_cfg.refill_period;
+	value |= 1 << 4;
+	value |= 1 << 5;
+	value |= dev->vow_cfg.vow_watf_en << 9;
+	value |= 1 << 12;
+	value |= dev->vow_cfg.vow_atf_en << 13;
+	value |= 1 << 14;
+	req.vow_ctrl_val = value;
+	if (dev->vow_cfg.vow_atf_en)
+		req.tx_ctrl = cpu_to_le32(0x6bf69e1f);
+	sch_value |= 1 << 6;
+	sch_value |= (((dev->vow_cfg.vow_show_en == 0) ? 0 :
+                      (dev->vow_cfg.vow_show_en - 1 )) << 4);
+	req.sch_ctrl = sch_value;
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SET_FEATURE_CTRL),
+							 &req, sizeof(req), false);
+}
+
+int mt7915_mcu_set_vow_band(struct mt7915_dev *dev, struct mt7915_vif *mvif)
+{
+	struct module_ctrl {
+		__le16 action;
+		__le16 sub_action;
+		__le32 rsv1[5];
+		u8 rsv2[72];
+		u8 group_idx;
+		u8 band_idx;
+		u8 rsv3[2];
+	} __packed req = {
+		.action = cpu_to_le16(0x1),
+		.sub_action = cpu_to_le16(0x4),
+		.group_idx = mvif->sta.vow_sta_cfg.bss_grp_idx,
+		.band_idx = mvif->mt76.band_idx,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(AT_PROC_MODULE),
 				 &req, sizeof(req), false);
 }
 
