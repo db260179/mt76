@@ -292,7 +292,7 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 
 	phy->sku_limit_en = true;
 	phy->sku_path_en = true;
-	np = mt76_find_power_limits_node(&dev->mt76);
+	np = mt76_find_power_limits_node(phy->mt76);
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
 		u32 target_power = 0;
@@ -336,8 +336,10 @@ void mt7915_init_txpower(struct mt7915_phy *phy)
 		__mt7915_init_txpower(phy, &phy->mt76->sband_2g.sband);
 	if (phy->mt76->cap.has_5ghz)
 		__mt7915_init_txpower(phy, &phy->mt76->sband_5g.sband);
-	if (phy->mt76->cap.has_6ghz)
+	if (phy->mt76->cap.has_6ghz) {
 		__mt7915_init_txpower(phy, &phy->mt76->sband_6g.sband);
+		phy->mt76->beacon_dup = 1;
+	}
 }
 
 static void

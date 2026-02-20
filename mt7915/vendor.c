@@ -107,6 +107,13 @@ bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
 	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP] = { .type = NLA_U64 },
 };
 
+static struct nla_policy
+txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP] = { .type = NLA_U8 },
+};
+
 struct csi_null_tone {
 	u8 start;
 	u8 end;
@@ -1471,6 +1478,63 @@ mt7915_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev
 	return len;
 }
 
+static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
+				  struct wireless_dev *wdev,
+				  const void *data,
+				  int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
+	struct mt76_phy *mphy = phy->mt76;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
+	struct mt76_power_limits limits;
+	int err;
+	u8 val;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
+			txpower_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE]);
+
+		if (mphy->cap.has_6ghz) {
+			err = mt7915_mcu_set_lpi(phy, val);
+			if (err)
+				return err;
+		}
+	}
+
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
+
+		if (mt76_find_power_limits_node(mphy) == NULL)
+			mphy->sku_idx = 0;
+
+		phy->sku_path_en = true;
+		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &limits, 127);
+		if (!limits.path.ofdm[0])
+			phy->sku_path_en = false;
+
+		err = mt7915_mcu_set_sku_en(phy);
+		if (err)
+			return err;
+	}
+
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP]);
+		if (mphy->cap.has_6ghz)
+			mphy->beacon_dup = val;
+	}
+
+	err = mt7915_mcu_set_txpower_sku(phy);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
@@ -1587,6 +1651,17 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.dumpit = mt7915_vendor_bss_color_ctrl_dump,
 		.policy = bss_color_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_TXPOWER_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7915_vendor_txpower_ctrl,
+		.policy = txpower_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
 	}
 };
 
