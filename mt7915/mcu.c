@@ -1016,6 +1016,7 @@ mt7915_mcu_sta_muru_tlv(struct mt7915_dev *dev, struct sk_buff *skb,
 {
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
 	struct ieee80211_he_cap_elem *elem = &sta->deflink.he_cap.he_cap_elem;
+	struct mt7915_phy *phy = mvif->phy;
 	struct sta_rec_muru *muru;
 	struct tlv *tlv;
 
@@ -1027,12 +1028,17 @@ mt7915_mcu_sta_muru_tlv(struct mt7915_dev *dev, struct sk_buff *skb,
 
 	muru = (struct sta_rec_muru *)tlv;
 
-	muru->cfg.mimo_dl_en = mvif->cap.he_mu_ebfer ||
+	muru->cfg.mimo_dl_en = (mvif->cap.he_mu_ebfer ||
 			       mvif->cap.vht_mu_ebfer ||
-			       mvif->cap.vht_mu_ebfee;
+			       mvif->cap.vht_mu_ebfee) &&
+			       !!(phy->muru_onoff & MUMIMO_DL);
 	if (!is_mt7915(&dev->mt76))
 		muru->cfg.mimo_ul_en = true;
 	muru->cfg.ofdma_dl_en = true;
+
+	muru->cfg.mimo_ul_en = !!(phy->muru_onoff & MUMIMO_UL);
+	muru->cfg.ofdma_dl_en = !!(phy->muru_onoff & OFDMA_DL);
+	muru->cfg.ofdma_ul_en = !!(phy->muru_onoff & OFDMA_UL);
 
 	if (sta->deflink.vht_cap.vht_supported)
 		muru->mimo_dl.vht_mu_bfee =

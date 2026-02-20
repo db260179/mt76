@@ -376,6 +376,7 @@ mt7915_init_wiphy(struct mt7915_phy *phy)
 		IEEE80211_RADIOTAP_TIMESTAMP_UNIT_US;
 
 	phy->slottime = 9;
+	phy->muru_onoff = OFDMA_DL | OFDMA_UL | MUMIMO_DL | MUMIMO_UL;
 
 	hw->sta_data_size = sizeof(struct mt7915_sta);
 	hw->vif_data_size = sizeof(struct mt7915_vif);

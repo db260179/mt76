@@ -318,6 +318,8 @@ struct mt7915_phy {
 
 	u8 stuck_queue_check;
 
+	u8 muru_onoff;
+
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
 
