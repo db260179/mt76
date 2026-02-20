@@ -491,7 +491,8 @@ enum {
 };
 
 enum {
-	TX_POWER_INFO_PATH = 1,
+	TX_POWER_INFO_BASIC,
+	TX_POWER_INFO_PATH,
 	TX_POWER_INFO_RATE,
 };
 
