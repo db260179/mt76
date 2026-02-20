@@ -3486,11 +3486,14 @@ int mt7915_mcu_get_chan_mib_info(struct mt7915_phy *phy, bool chan_switch)
 	if (chan_switch)
 		goto out;
 
-	state->cc_tx += cc_tx - state_ts->cc_tx;
-	state->cc_bss_rx += __res_u64(2) - state_ts->cc_bss_rx;
-	state->cc_rx += __res_u64(2) + __res_u64(3) - state_ts->cc_rx;
-	state->cc_busy += __res_u64(0) + cc_tx + __res_u64(2) + __res_u64(3) -
-			  state_ts->cc_busy;
+	if (cc_tx - state_ts->cc_tx < 150000)
+		state->cc_tx += cc_tx - state_ts->cc_tx;
+	if (__res_u64(2) - state_ts->cc_bss_rx < 150000)
+		state->cc_bss_rx += __res_u64(2) - state_ts->cc_bss_rx;
+	if (__res_u64(2) + __res_u64(3) - state_ts->cc_rx < 150000)
+		state->cc_rx += __res_u64(2) + __res_u64(3) - state_ts->cc_rx;
+	if (__res_u64(0) + cc_tx + __res_u64(2) + __res_u64(3) - state_ts->cc_busy < 150000)
+		state->cc_busy += __res_u64(0) + cc_tx + __res_u64(2) + __res_u64(3) - state_ts->cc_busy;
 
 out:
 	state_ts->cc_tx = cc_tx;
