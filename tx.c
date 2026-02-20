@@ -101,7 +101,7 @@ __mt76_tx_status_skb_done(struct mt76_dev *dev, struct sk_buff *skb, u8 flags,
 
 	/* Tx status can be unreliable. if it fails, mark the frame as ACKed */
 	if (flags & MT_TX_CB_TXS_FAILED &&
-	    (dev->drv->drv_flags & MT_DRV_IGNORE_TXS_FAILED)) {
+	    (dev->drv->drv_flags & MT_DRV_SW_RX_AIRTIME)) { /* Only CE chips do so */
 		info->status.rates[0].count = 0;
 		info->status.rates[0].idx = -1;
 		info->flags |= IEEE80211_TX_STAT_ACK;
