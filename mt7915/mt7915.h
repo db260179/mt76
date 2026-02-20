@@ -86,6 +86,8 @@
 
 #define MT7915_RTS_LEN_THRES		0x92b
 
+#define IP_DSCP_NUM			64
+
 struct mt7915_vif;
 struct mt7915_sta;
 struct mt7915_dfs_pulse;
@@ -177,6 +179,8 @@ struct mt7915_vif {
 
 	struct ieee80211_tx_queue_params queue_params[IEEE80211_NUM_ACS];
 	struct cfg80211_bitrate_mask bitrate_mask;
+	/* QoS map support */
+	u8 qos_map[IP_DSCP_NUM];
 };
 
 /* crash-dump */
