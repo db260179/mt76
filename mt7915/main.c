@@ -234,6 +234,9 @@ int mt7915_init_vif(struct mt7915_phy *phy, struct ieee80211_vif *vif, bool bf_e
 	bool ext_phy = phy != &dev->phy;
 	int idx, i, ret = 0;
 
+	/* Clear private driver data in case of reuse */
+	memset(mvif, 0, sizeof(struct mt7915_vif));
+
 	/* To differentiate the mac address of TXD and TXCMD interface */
 	vif->addr[0] |= bf_en;
 
