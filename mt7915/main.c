@@ -93,11 +93,23 @@ int mt7915_run(struct ieee80211_hw *hw)
 	if (ret)
 		goto out;
 
+	/* Enable SCS if and only if WED Rx (2.0 and after) is supported. */
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+	    mtk_wed_get_rx_capa(&dev->mt76.mmio.wed) &&
+	    !mt76_testmode_enabled(phy->mt76)) {
+		ret = mt7915_mcu_set_scs_en(phy, true);
+		if (ret)
+			goto out;
+	}
+
 	set_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 
 	if (!mt76_testmode_enabled(phy->mt76))
 		ieee80211_queue_delayed_work(hw, &phy->mt76->mac_work,
 					     MT7915_WATCHDOG_TIME);
+
+	if (!running && phy->scs_ctrl.scs_enable)
+		ieee80211_queue_delayed_work(hw, &dev->scs_work, HZ);
 
 	if (!running)
 		mt7915_mac_reset_counters(phy);
@@ -139,6 +151,7 @@ static void mt7915_stop(struct ieee80211_hw *hw, bool suspend)
 	}
 
 	if (!mt7915_dev_running(dev)) {
+		cancel_delayed_work_sync(&dev->scs_work);
 		mt76_connac_mcu_set_pm(&dev->mt76, dev->phy.mt76->band_idx, 1);
 		mt7915_mcu_set_mac(dev, dev->phy.mt76->band_idx, false, false);
 	}
