@@ -32,6 +32,20 @@ static const char * const testmode_tx_mode[] = {
 	[MT76_TM_TX_MODE_HE_MU] = "he_mu",
 };
 
+static const char * const testmode_txbf_act[] = {
+	[MT76_TM_TXBF_ACT_INIT] = "init",
+	[MT76_TM_TXBF_ACT_UPDATE_CH] = "update_ch",
+	[MT76_TM_TXBF_ACT_PHASE_COMP] = "phase_comp",
+	[MT76_TM_TXBF_ACT_TX_PREP] = "tx_prep",
+	[MT76_TM_TXBF_ACT_IBF_PROF_UPDATE] = "ibf_prof_update",
+	[MT76_TM_TXBF_ACT_EBF_PROF_UPDATE] = "ebf_prof_update",
+	[MT76_TM_TXBF_ACT_APPLY_TX] = "apply_tx",
+	[MT76_TM_TXBF_ACT_PHASE_CAL] = "phase_cal",
+	[MT76_TM_TXBF_ACT_PROF_UPDATE_ALL] = "prof_update",
+	[MT76_TM_TXBF_ACT_PROF_UPDATE_ALL_CMD] = "prof_update_all",
+	[MT76_TM_TXBF_ACT_E2P_UPDATE] = "e2p_update",
+};
+
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
 {
 	unsigned int i = nla_get_u8(attr);
@@ -80,6 +94,17 @@ static void print_u8(const struct tm_field *field, struct nlattr *attr)
 static void print_s8(const struct tm_field *field, struct nlattr *attr)
 {
 	printf("%d", (int8_t)nla_get_u8(attr));
+}
+
+static bool parse_u16_hex(const struct tm_field *field, int idx,
+			  struct nl_msg *msg, const char *val)
+{
+	return !nla_put_u16(msg, idx, strtoul(val, NULL, 16));
+}
+
+static void print_u16_hex(const struct tm_field *field, struct nlattr *attr)
+{
+	printf("%d", nla_get_u16(attr));
 }
 
 static bool parse_u32(const struct tm_field *field, int idx,
@@ -387,6 +412,8 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, AID, "aid"),
 	FIELD(u8, RU_ALLOC, "ru_alloc"),
 	FIELD(u8, RU_IDX, "ru_idx"),
+	FIELD_ENUM(TXBF_ACT, "txbf_act", testmode_txbf_act),
+	FIELD_ARRAY(u16_hex, TXBF_PARAM, "txbf_param"),
 	FIELD_MAC(MAC_ADDRS, "mac_addrs"),
 	FIELD_NESTED_RO(STATS, stats, "",
 			.print_extra = print_extra_stats),
@@ -418,6 +445,7 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_RU_ALLOC] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_RU_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_STATS] = { .type = NLA_NESTED },
+	[MT76_TM_ATTR_TXBF_ACT] = { .type = NLA_U8 },
 };
 
 const struct tm_field msg_field = {
