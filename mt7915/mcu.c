@@ -5047,3 +5047,75 @@ int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool w
 
 	return 0;
 }
+
+int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compensation)
+{
+	static const u8 ch_band[] = {
+		[NL80211_BAND_2GHZ] = 0,
+		[NL80211_BAND_5GHZ] = 1,
+		[NL80211_BAND_6GHZ] = 2,
+	};
+	struct mt7915_dev *dev = phy->dev;
+	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
+	struct {
+		u8 band_idx;
+		u8 cmd_idx;
+		u8 setting[3];
+		bool record_in_fw;
+		u8 region;
+		s8 thres_compensation;
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.cmd_idx = mode,
+		.record_in_fw = false,
+		.thres_compensation = compensation,
+	};
+
+	if (ch_band[chandef->chan->band] == 2 && dev->mt76.region == NL80211_DFS_FCC)
+		req.region = dev->mt76.region;
+
+	if (mode == EDCCA_CTRL_SET_EN) {
+		req.setting[0] = (!value)? EDCCA_MODE_AUTO: value[0];
+	} else if (mode == EDCCA_CTRL_SET_THERS) {
+		req.setting[0] = value[0];
+		req.setting[1] = value[1];
+		req.setting[2] = value[2];
+	} else {
+		return -EINVAL;
+	}
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(EDCCA), &req, sizeof(req), true);
+}
+
+int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		u8 band_idx;
+		u8 cmd_idx;
+		u8 setting[3];
+		bool record_in_fw;
+		u8 region;
+		s8 thres_compensation;
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.cmd_idx = mode,
+		.record_in_fw = false,
+	};
+	struct sk_buff *skb;
+	int ret;
+	struct mt7915_mcu_edcca_info *res;
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_EXT_CMD(EDCCA), &req, sizeof(req),
+				        true, &skb);
+	if (ret)
+		return ret;
+
+	res = (struct mt7915_mcu_edcca_info *)skb->data;
+	*value++ = res->info[0];
+	*value++ = res->info[1];
+	*value = res->info[2];
+	dev_kfree_skb(skb);
+
+	return 0;
+}

@@ -831,7 +831,8 @@ void mt7915_vendor_amnt_fill_rx(struct mt7915_phy *phy, struct sk_buff *skb);
 int mt7915_vendor_amnt_sta_remove(struct mt7915_phy *phy,
 				  struct ieee80211_sta *sta);
 #endif
-
+int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compensation);
+int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value);
 int mt7915_mcu_ipi_hist_ctrl(struct mt7915_phy *phy, void *data, u8 cmd, bool wait_resp);
 int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool wait_resp);
 
