@@ -35,6 +35,7 @@ wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
 	[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU] = {.type = NLA_U8 },
 	[MTK_VENDOR_ATTR_WIRELESS_CTRL_MU_EDCA] = {.type = NLA_U8 },
 	[MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT] = {.type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA] = {.type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1149,6 +1150,9 @@ static int mt7915_vendor_wireless_ctrl(struct wiphy *wiphy,
 	} else if (tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU]) {
 		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU]);
 		mt7915_set_wireless_amsdu(hw, val8);
+	} else if (tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA]) {
+		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA]);
+		mt7915_mcu_set_cfg(phy, CFGINFO_RTS_SIGTA_EN_FEATURE, val8);
 	}
 
 	return 0;
