@@ -211,6 +211,57 @@ struct mt7915_hif {
 	u32 index;
 };
 
+#ifdef CONFIG_MTK_VENDOR
+enum csi_bw {
+	CSI_BW20,
+	CSI_BW40,
+	CSI_BW80,
+	CSI_BW160
+};
+
+#define CSI_BW20_DATA_COUNT	64
+#define CSI_BW40_DATA_COUNT	128
+#define CSI_BW80_DATA_COUNT	256
+#define CSI_BW160_DATA_COUNT	512
+
+struct csi_data {
+	u8 ch_bw;
+	u16 data_num;
+	s16 data_i[CSI_BW160_DATA_COUNT];
+	s16 data_q[CSI_BW160_DATA_COUNT];
+	u8 band;
+	s8 rssi;
+	u8 snr;
+	u32 ts;
+	u8 data_bw;
+	u8 pri_ch_idx;
+	u8 ta[ETH_ALEN];
+	u32 ext_info;
+	u8 rx_mode;
+	u32 chain_info;
+	u16 tx_idx;
+	u16 rx_idx;
+	u32 segment_num;
+	u8 remain_last;
+	u16 pkt_sn;
+	u8 tr_stream;
+
+	struct list_head node;
+};
+struct csi_mac_filter {
+	struct list_head node;
+
+	u8 mac[ETH_ALEN];
+	u32 interval;
+};
+
+#define DEL_CSI_MAC 0
+#define ADD_CSI_MAC 1
+#define SHOW_CSI_MAC 2
+
+#define MAX_CSI_MAC_NUM 10
+#endif
+
 struct mt7915_phy {
 	struct mt76_phy *mt76;
 	struct mt7915_dev *dev;
@@ -257,6 +308,25 @@ struct mt7915_phy {
 
 		u8 spe_idx;
 	} test;
+#endif
+
+#ifdef CONFIG_MTK_VENDOR
+	struct {
+		struct list_head data_list;
+		spinlock_t data_lock;
+		u32 count;
+		bool mask;
+		bool reorder;
+		bool enable;
+
+		struct mutex mac_filter_lock;
+		struct list_head mac_filter_list;
+		u8 mac_filter_cnt;
+
+		struct csi_data buffered_csi;
+		u32 interval;
+		u32 last_record;
+	} csi;
 #endif
 };
 
@@ -687,6 +757,14 @@ void mt7915_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 #endif
 int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 			 bool pci, int *irq);
+
+#ifdef CONFIG_MTK_VENDOR
+void mt7915_vendor_register(struct mt7915_phy *phy);
+int mt7915_mcu_set_csi(struct mt7915_phy *phy, u8 mode,
+		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr, u32 sta_interval);
+struct csi_mac_filter *mt7915_csi_mac_filter_find(struct mt7915_phy *phy, u8 *addr);
+void mt7915_csi_mac_filter_clear(struct mt7915_phy *phy);
+#endif
 
 #ifdef MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);

@@ -689,6 +689,14 @@ mt7915_register_ext_phy(struct mt7915_dev *dev, struct mt7915_phy *phy)
 	/* init wiphy according to mphy and phy */
 	mt7915_init_wiphy(phy);
 
+#ifdef CONFIG_MTK_VENDOR
+	INIT_LIST_HEAD(&phy->csi.data_list);
+	spin_lock_init(&phy->csi.data_lock);
+	INIT_LIST_HEAD(&phy->csi.mac_filter_list);
+	mutex_init(&phy->csi.mac_filter_lock);
+	mt7915_vendor_register(phy);
+#endif
+
 	ret = mt76_register_phy(mphy, true, mt76_rates,
 				ARRAY_SIZE(mt76_rates));
 	if (ret)
@@ -1166,6 +1174,28 @@ void mt7915_set_stream_he_caps(struct mt7915_phy *phy)
 	}
 }
 
+#ifdef CONFIG_MTK_VENDOR
+static int mt7915_unregister_features(struct mt7915_phy *phy)
+{
+	struct csi_data *c, *tmp_c;
+
+	spin_lock_bh(&phy->csi.data_lock);
+	phy->csi.enable = 0;
+
+	list_for_each_entry_safe(c, tmp_c, &phy->csi.data_list, node) {
+		list_del(&c->node);
+		kfree(c);
+	}
+	spin_unlock_bh(&phy->csi.data_lock);
+
+	mutex_lock(&phy->csi.mac_filter_lock);
+	mt7915_csi_mac_filter_clear(phy);
+	mutex_unlock(&phy->csi.mac_filter_lock);
+
+	return 0;
+}
+#endif
+
 static void mt7915_unregister_ext_phy(struct mt7915_dev *dev)
 {
 	struct mt7915_phy *phy = mt7915_ext_phy(dev);
@@ -1173,6 +1203,10 @@ static void mt7915_unregister_ext_phy(struct mt7915_dev *dev)
 
 	if (!phy)
 		return;
+
+#ifdef CONFIG_MTK_VENDOR
+	mt7915_unregister_features(phy);
+#endif
 
 	mt7915_unregister_thermal(phy);
 	mt76_unregister_phy(mphy);
@@ -1185,6 +1219,10 @@ static void mt7915_stop_hardware(struct mt7915_dev *dev)
 	mt76_connac2_tx_token_put(&dev->mt76);
 	mt7915_dma_cleanup(dev);
 	tasklet_disable(&dev->mt76.irq_tasklet);
+
+#ifdef CONFIG_MTK_VENDOR
+	mt7915_unregister_features(&dev->phy);
+#endif
 
 	if (is_mt798x(&dev->mt76))
 		mt7986_wmac_disable(dev);
@@ -1225,6 +1263,14 @@ int mt7915_register_device(struct mt7915_dev *dev)
 
 #ifdef CONFIG_NL80211_TESTMODE
 	dev->mt76.test_ops = &mt7915_testmode_ops;
+#endif
+
+#ifdef CONFIG_MTK_VENDOR
+	INIT_LIST_HEAD(&dev->phy.csi.data_list);
+	spin_lock_init(&dev->phy.csi.data_lock);
+	INIT_LIST_HEAD(&dev->phy.csi.mac_filter_list);
+	mutex_init(&dev->phy.csi.mac_filter_lock);
+	mt7915_vendor_register(&dev->phy);
 #endif
 
 	ret = mt76_register_device(&dev->mt76, true, mt76_rates,
