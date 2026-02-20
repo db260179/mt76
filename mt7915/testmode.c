@@ -14,6 +14,12 @@ enum {
 	TM_CHANGED_AID,
 	TM_CHANGED_CFG,
 	TM_CHANGED_TXBF_ACT,
+	TM_CHANGED_OFF_CHAN_CH,
+	TM_CHANGED_OFF_CHAN_CENTER_CH,
+	TM_CHANGED_OFF_CHAN_BW,
+	TM_CHANGED_IPI_THRESHOLD,
+	TM_CHANGED_IPI_PERIOD,
+	TM_CHANGED_IPI_RESET,
 
 	/* must be last */
 	NUM_TM_CHANGED
@@ -26,6 +32,12 @@ static const u8 tm_change_map[] = {
 	[TM_CHANGED_AID] = MT76_TM_ATTR_AID,
 	[TM_CHANGED_CFG] = MT76_TM_ATTR_CFG,
 	[TM_CHANGED_TXBF_ACT] = MT76_TM_ATTR_TXBF_ACT,
+	[TM_CHANGED_OFF_CHAN_CH] = MT76_TM_ATTR_OFF_CH_SCAN_CH,
+	[TM_CHANGED_OFF_CHAN_CENTER_CH] = MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH,
+	[TM_CHANGED_OFF_CHAN_BW] = MT76_TM_ATTR_OFF_CH_SCAN_BW,
+	[TM_CHANGED_IPI_THRESHOLD] = MT76_TM_ATTR_IPI_THRESHOLD,
+	[TM_CHANGED_IPI_PERIOD] = MT76_TM_ATTR_IPI_PERIOD,
+	[TM_CHANGED_IPI_RESET] = MT76_TM_ATTR_IPI_RESET,
 };
 
 struct reg_band {
@@ -984,6 +996,272 @@ mt7915_tm_set_txbf(struct mt7915_phy *phy)
 	return 0;
 }
 
+static u8
+mt7915_tm_get_center_chan(struct mt7915_phy *phy, struct cfg80211_chan_def *chandef,
+			  int width_mhz)
+{
+	struct mt76_phy *mphy = phy->mt76;
+	const struct ieee80211_channel *chan = mphy->sband_5g.sband.channels;
+	u32 bitmap, i, offset, size = 32;
+	u16 first_control = 0, control_chan = chandef->chan->hw_value;
+	static const u32 width_to_bitmap[] = {
+		[NL80211_CHAN_WIDTH_20_NOHT] = 0x0,
+		[NL80211_CHAN_WIDTH_20] = 0x0,
+		[NL80211_CHAN_WIDTH_40] = 0x55554055,
+		[NL80211_CHAN_WIDTH_80] = 0x44444011,
+		[NL80211_CHAN_WIDTH_80P80] = 0x0,
+		[NL80211_CHAN_WIDTH_160] = 0x04004001,
+	};
+
+	bitmap = width_to_bitmap[chandef->width];
+	if (!bitmap)
+		return control_chan;
+
+	offset = width_mhz / 10 - 2;
+	for (i = 0; i < size; i++) {
+		if (!((1 << i) & bitmap))
+			continue;
+
+		if (control_chan >= chan[i].hw_value)
+			first_control = chan[i].hw_value;
+		else
+			break;
+	}
+
+	if (chandef->width == NL80211_CHAN_WIDTH_40 &&
+	    control_chan >= chan[size].hw_value)
+		return chan[size].hw_value + offset;
+	else if (first_control == 0)
+		return control_chan;
+
+	return first_control + offset;
+}
+
+static int
+mt7915_tm_set_offchan(struct mt7915_phy *phy, bool no_center)
+{
+	struct mt76_phy *mphy = phy->mt76;
+	struct mt7915_dev *dev = phy->dev;
+	struct ieee80211_hw *hw = mphy->hw;
+	struct mt76_testmode_data *td = &phy->mt76->test;
+	struct cfg80211_chan_def chandef = {};
+	struct ieee80211_channel *chan;
+	int ret, freq = ieee80211_channel_to_frequency(td->offchan_ch, NL80211_BAND_5GHZ);
+	int width_mhz;
+	const int bw_to_mhz[] = {
+		[NL80211_CHAN_WIDTH_20_NOHT] = 20,
+		[NL80211_CHAN_WIDTH_20] = 20,
+		[NL80211_CHAN_WIDTH_40] = 40,
+		[NL80211_CHAN_WIDTH_80] = 80,
+		[NL80211_CHAN_WIDTH_80P80] = 80,
+		[NL80211_CHAN_WIDTH_160] = 160,
+	};
+
+	if (!mphy->cap.has_5ghz || !freq) {
+		ret = -EINVAL;
+		dev_info(dev->mt76.dev, "Failed to set offchan (invalid band or channel)!\n");
+		goto out;
+	}
+
+	chandef.width = td->offchan_bw;
+	width_mhz = bw_to_mhz[chandef.width];
+	chan = ieee80211_get_channel(hw->wiphy, freq);
+	if (!chan) {
+		ret = -EINVAL;
+		dev_info(dev->mt76.dev, "Failed to set offchan (invalid control channel)!\n");
+		goto out;
+	}
+	chandef.chan = chan;
+
+	if (no_center)
+		td->offchan_center_ch = mt7915_tm_get_center_chan(phy, &chandef, width_mhz);
+	chandef.center_freq1 = ieee80211_channel_to_frequency(td->offchan_center_ch,
+							      NL80211_BAND_5GHZ);
+	if (!cfg80211_chandef_valid(&chandef)) {
+		ret = -EINVAL;
+		dev_info(dev->mt76.dev, "Failed to set offchan, chandef is invalid!\n");
+		goto out;
+	}
+
+	memset(&dev->rdd2_chandef, 0, sizeof(struct cfg80211_chan_def));
+
+	ret = mt7915_mcu_rdd_background_enable(phy, &chandef);
+
+	if (ret)
+		goto out;
+
+	dev->rdd2_phy = phy;
+	dev->rdd2_chandef = chandef;
+
+	return ret;
+
+out:
+	td->offchan_ch = 0;
+	td->offchan_center_ch = 0;
+	td->offchan_bw = 0;
+
+	return ret;
+}
+
+static void
+mt7915_tm_dump_ipi(struct mt7915_phy *phy, void *data, u8 antenna_num,
+		   u8 start_antenna_idx, bool is_scan)
+{
+#define PRECISION	100
+	struct mt7915_dev *dev = phy->dev;
+	struct mt76_testmode_data *td = &phy->mt76->test;
+	struct mt7915_mcu_rdd_ipi_scan *scan_data;
+	struct mt7915_mcu_rdd_ipi_ctrl *ctrl_data;
+	u32 ipi_idx, ipi_free_count, ipi_percentage, ipi_hist_count_th, ipi_hist_total_count;
+	u32 self_idle_ratio, ipi_idle_ratio, channel_load, tx_assert_time;
+	u8 i, antenna_idx = start_antenna_idx;
+	u32 *ipi_hist_data;
+	const char *power_lower_bound, *power_upper_bound;
+	static const char * const ipi_idx_to_power_bound[] = {
+		[RDD_IPI_HIST_0] = "-92",
+		[RDD_IPI_HIST_1] = "-89",
+		[RDD_IPI_HIST_2] = "-86",
+		[RDD_IPI_HIST_3] = "-83",
+		[RDD_IPI_HIST_4] = "-80",
+		[RDD_IPI_HIST_5] = "-75",
+		[RDD_IPI_HIST_6] = "-70",
+		[RDD_IPI_HIST_7] = "-65",
+		[RDD_IPI_HIST_8] = "-60",
+		[RDD_IPI_HIST_9] = "-55",
+		[RDD_IPI_HIST_10] = "inf",
+	};
+
+	if (is_scan) {
+		scan_data = (struct mt7915_mcu_rdd_ipi_scan *)data;
+		tx_assert_time = scan_data->tx_assert_time;
+	} else {
+		ctrl_data = (struct mt7915_mcu_rdd_ipi_ctrl *)data;
+		tx_assert_time = ctrl_data->tx_assert_time;
+	}
+
+	for (i = 0; i < antenna_num; i++) {
+		ipi_free_count = 0;
+		ipi_hist_count_th = 0;
+		ipi_hist_total_count = 0;
+		ipi_hist_data = is_scan ? scan_data->ipi_hist_val[antenna_idx] :
+					  ctrl_data->ipi_hist_val;
+
+		dev_info(dev->mt76.dev, "Antenna index: %d\n", antenna_idx);
+		for (ipi_idx = 0; ipi_idx < POWER_INDICATE_HIST_MAX; ipi_idx++) {
+			power_lower_bound = ipi_idx ? ipi_idx_to_power_bound[ipi_idx - 1] :
+						      "-inf";
+			power_upper_bound = ipi_idx_to_power_bound[ipi_idx];
+
+			dev_info(dev->mt76.dev,
+				 "IPI %d (power range: (%s, %s] dBm): ipi count = %d\n",
+				 ipi_idx, power_lower_bound,
+				 power_upper_bound, ipi_hist_data[ipi_idx]);
+
+			if (td->ipi_threshold <= ipi_idx && ipi_idx <= RDD_IPI_HIST_10)
+				ipi_hist_count_th += ipi_hist_data[ipi_idx];
+
+			ipi_hist_total_count += ipi_hist_data[ipi_idx];
+		}
+		ipi_free_count = is_scan ? ipi_hist_total_count :
+					   ipi_hist_data[RDD_IPI_FREE_RUN_CNT];
+
+		dev_info(dev->mt76.dev,
+			 "IPI threshold %d: ipi_hist_count_th = %d, ipi_free_count = %d\n",
+			 td->ipi_threshold, ipi_hist_count_th, ipi_free_count);
+		dev_info(dev->mt76.dev, "TX assert time =  %d [ms]\n",
+			 tx_assert_time / 1000);
+
+		// Calculate channel load = (self idle ratio - idle ratio) / self idle ratio
+		if (ipi_hist_count_th >= UINT_MAX / (100 * PRECISION))
+			ipi_percentage = 100 * PRECISION *
+					(ipi_hist_count_th / (100 * PRECISION)) /
+					(ipi_free_count / (100 * PRECISION));
+		else
+			ipi_percentage = PRECISION * 100 * ipi_hist_count_th / ipi_free_count;
+
+		ipi_idle_ratio = ((100 * PRECISION) - ipi_percentage) / PRECISION;
+
+		self_idle_ratio = PRECISION * 100 *
+				  (td->ipi_period - (tx_assert_time / 1000)) /
+				  td->ipi_period / PRECISION;
+
+		if (self_idle_ratio < ipi_idle_ratio)
+			channel_load = 0;
+		else
+			channel_load = self_idle_ratio - ipi_idle_ratio;
+
+		if (self_idle_ratio <= td->ipi_threshold) {
+			dev_info(dev->mt76.dev,
+				 "band[%d]: self idle ratio = %d%%, idle ratio = %d%%\n",
+				 phy->mt76->band_idx, self_idle_ratio, ipi_idle_ratio);
+			return;
+		}
+
+		channel_load = (100 * channel_load) / self_idle_ratio;
+		dev_info(dev->mt76.dev,
+			 "band[%d]: chan load = %d%%, self idle ratio = %d%%, idle ratio = %d%%\n",
+			 phy->mt76->band_idx, channel_load, self_idle_ratio, ipi_idle_ratio);
+		antenna_idx++;
+	}
+}
+
+static void
+mt7915_tm_ipi_work(struct work_struct *work)
+{
+	struct mt7915_phy *phy = container_of(work, struct mt7915_phy, ipi_work.work);
+	struct mt7915_dev *dev = phy->dev;
+	struct mt76_testmode_data *td = &phy->mt76->test;
+	u8 start_antenna_idx = 0, antenna_num = 1;
+
+	if (!is_mt7915(&dev->mt76)) {
+		struct mt7915_mcu_rdd_ipi_scan data;
+
+		if (phy->mt76->band_idx)
+			start_antenna_idx = 4;
+
+		/* Use all antenna */
+		if (td->ipi_antenna_idx == MT76_TM_IPI_ANTENNA_ALL)
+			antenna_num = 4;
+		else
+			start_antenna_idx += td->ipi_antenna_idx;
+
+		mt7915_mcu_ipi_hist_scan(phy, &data, 0, true);
+		mt7915_tm_dump_ipi(phy, &data, antenna_num, start_antenna_idx, true);
+	} else {
+		struct mt7915_mcu_rdd_ipi_ctrl data;
+
+		start_antenna_idx = 4;
+		mt7915_mcu_ipi_hist_ctrl(phy, &data, RDD_IPI_HIST_ALL_CNT, true);
+		mt7915_tm_dump_ipi(phy, &data, antenna_num, start_antenna_idx, false);
+	}
+}
+
+static inline void
+mt7915_tm_reset_ipi(struct mt7915_phy *phy)
+{
+#define IPI_RESET_BIT	BIT(2)
+	struct mt7915_dev *dev = phy->dev;
+
+	if (is_mt7915(&dev->mt76))
+		mt7915_mcu_ipi_hist_ctrl(phy, NULL, RDD_SET_IPI_HIST_RESET, false);
+	else
+		mt76_set(dev, MT_WF_IPI_RESET, IPI_RESET_BIT);
+}
+
+static int
+mt7915_tm_set_ipi(struct mt7915_phy *phy)
+{
+	struct mt76_testmode_data *td = &phy->mt76->test;
+
+	mt7915_tm_reset_ipi(phy);
+
+	cancel_delayed_work(&phy->ipi_work);
+	ieee80211_queue_delayed_work(phy->mt76->hw, &phy->ipi_work,
+				     msecs_to_jiffies(td->ipi_period));
+
+	return 0;
+}
+
 static int
 mt7915_tm_set_wmm_qid(struct mt7915_phy *phy, u8 qid, u8 aifs, u8 cw_min,
 		      u16 cw_max, u16 txop, u8 tx_cmd)
@@ -1274,6 +1552,8 @@ mt7915_tm_init(struct mt7915_phy *phy, bool en)
 		phy->mt76->test.tx_mpdu_len = 0;
 		phy->test.bf_en = 0;
 		mt7915_tm_set_entry(phy);
+	} else {
+		INIT_DELAYED_WORK(&phy->ipi_work, mt7915_tm_ipi_work);
 	}
 }
 
@@ -2039,6 +2319,14 @@ mt7915_tm_update_params(struct mt7915_phy *phy, u32 changed)
 		mt7915_tm_set_cfg(phy);
 	if (changed & BIT(TM_CHANGED_TXBF_ACT))
 		mt7915_tm_set_txbf(phy);
+	if ((changed & BIT(TM_CHANGED_OFF_CHAN_CH)) &&
+	    (changed & BIT(TM_CHANGED_OFF_CHAN_BW)))
+		mt7915_tm_set_offchan(phy, !(changed & BIT(TM_CHANGED_OFF_CHAN_CENTER_CH)));
+	if ((changed & BIT(TM_CHANGED_IPI_THRESHOLD)) &&
+	    (changed & BIT(TM_CHANGED_IPI_PERIOD)))
+		mt7915_tm_set_ipi(phy);
+	if (changed & BIT(TM_CHANGED_IPI_RESET))
+		mt7915_tm_reset_ipi(phy);
 }
 
 static int

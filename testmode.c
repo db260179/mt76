@@ -26,6 +26,13 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_TX_TIME] = { .type = NLA_U32 },
 	[MT76_TM_ATTR_FREQ_OFFSET] = { .type = NLA_U32 },
 	[MT76_TM_ATTR_DRV_DATA] = { .type = NLA_NESTED },
+	[MT76_TM_ATTR_OFF_CH_SCAN_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_OFF_CH_SCAN_PATH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_THRESHOLD] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_IPI_ANTENNA_INDEX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
@@ -407,6 +414,7 @@ mt76_testmode_init_defaults(struct mt76_phy *phy)
 	td->tx_count = 1;
 	td->tx_rate_mode = MT76_TM_TX_MODE_OFDM;
 	td->tx_rate_nss = 1;
+	td->ipi_antenna_idx = MT76_TM_IPI_ANTENNA_ALL;
 
 	memcpy(td->addr[0], phy->macaddr, ETH_ALEN);
 	memcpy(td->addr[1], phy->macaddr, ETH_ALEN);
@@ -615,6 +623,9 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	if (tb[MT76_TM_ATTR_TX_RATE_IDX])
 		td->tx_rate_idx = nla_get_u8(tb[MT76_TM_ATTR_TX_RATE_IDX]);
 
+	if (tb[MT76_TM_ATTR_IPI_PERIOD])
+		td->ipi_period = nla_get_u32(tb[MT76_TM_ATTR_IPI_PERIOD]);
+
 	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_MODE], &td->tx_rate_mode,
 			   0, MT76_TM_TX_MODE_MAX) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_NSS], &td->tx_rate_nss,
@@ -631,7 +642,16 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			   &td->tx_power_control, 0, 1) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_AID], &td->aid, 0, 16) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_ALLOC], &td->ru_alloc, 0, 0xff) ||
-	    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_IDX], &td->ru_idx, 0, 68))
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_IDX], &td->ru_idx, 0, 68) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_OFF_CH_SCAN_CH], &td->offchan_ch, 36, 196) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH], &td->offchan_center_ch,
+			   36, 196) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_OFF_CH_SCAN_BW],
+			   &td->offchan_bw, NL80211_CHAN_WIDTH_20_NOHT, NL80211_CHAN_WIDTH_160) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_THRESHOLD], &td->ipi_threshold, 0, 10) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_ANTENNA_INDEX], &td->ipi_antenna_idx,
+			   MT76_TM_IPI_ANTENNA_0, MT76_TM_IPI_ANTENNA_ALL) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_RESET], &td->ipi_reset, 0, 1))
 		goto out;
 
 	if (tb[MT76_TM_ATTR_TX_LENGTH]) {
@@ -868,6 +888,9 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	    nla_put_u8(msg, MT76_TM_ATTR_TX_RATE_MODE, td->tx_rate_mode) ||
 	    nla_put_u8(msg, MT76_TM_ATTR_TX_RATE_SGI, td->tx_rate_sgi) ||
 	    nla_put_u8(msg, MT76_TM_ATTR_TX_RATE_STBC, td->tx_rate_stbc) ||
+	    nla_put_u8(msg, MT76_TM_ATTR_OFF_CH_SCAN_CH, td->offchan_ch) ||
+	    nla_put_u8(msg, MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH, td->offchan_center_ch) ||
+	    nla_put_u8(msg, MT76_TM_ATTR_OFF_CH_SCAN_BW, td->offchan_bw) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_LTF) &&
 	     nla_put_u8(msg, MT76_TM_ATTR_TX_LTF, td->tx_ltf)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA) &&
