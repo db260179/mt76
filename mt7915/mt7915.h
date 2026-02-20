@@ -756,7 +756,11 @@ int mt7915_mcu_set_vow_drr_ctrl(struct mt7915_dev *dev, struct mt7915_sta *msta,
 int mt7915_mcu_set_vow_feature_ctrl(struct mt7915_dev *dev);
 int mt7915_mcu_set_vow_band(struct mt7915_dev *dev, struct mt7915_vif *mvif);
 void mt7915_vow_init_sta_bss_grp(struct mt7915_sta *sta);
+#ifdef MTK_DEBUG
+int mt7915_mcu_set_sku_en(struct mt7915_phy *phy, bool enable);
+#else
 int mt7915_mcu_set_sku_en(struct mt7915_phy *phy);
+#endif
 int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy);
 int mt7915_mcu_get_txpower_sku(struct mt7915_phy *phy, s8 *txpower, int len,
 			       u8 category);

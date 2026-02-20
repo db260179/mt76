@@ -3567,8 +3567,6 @@ int mt7915_mcu_set_txpower_frame_min(struct mt7915_phy *phy, s8 txpower)
 		.txpower_min = txpower * 2, /* 0.5db */
 	};
 
-	pr_info("%s: enable = %d\n", __func__, enable);
-
 	return mt76_mcu_send_msg(&dev->mt76,
 				 MCU_EXT_CMD(TX_POWER_FEATURE_CTRL), &req,
 				 sizeof(req), true);
@@ -3909,7 +3907,11 @@ int mt7915_mcu_set_test_param(struct mt7915_dev *dev, u8 param, bool test_mode,
 				 sizeof(req), false);
 }
 
+#ifdef MTK_DEBUG
+int mt7915_mcu_set_sku_en(struct mt7915_phy *phy, bool enable)
+#else
 int mt7915_mcu_set_sku_en(struct mt7915_phy *phy)
+#endif
 {
 	struct mt7915_dev *dev = phy->dev;
 	struct mt7915_sku {
@@ -3920,19 +3922,13 @@ int mt7915_mcu_set_sku_en(struct mt7915_phy *phy)
 	} __packed req = {
 		.band_idx = phy->mt76->band_idx,
 	};
-	int ret;
 
+#ifdef MTK_DEBUG
+	req.sku_enable = enable;
+#else
 	req.sku_enable = phy->sku_limit_en;
+#endif
 	req.format_id = TX_POWER_LIMIT_ENABLE;
-
-	ret = mt76_mcu_send_msg(&dev->mt76,
-				MCU_EXT_CMD(TX_POWER_FEATURE_CTRL), &req,
-				sizeof(req), true);
-	if (ret)
-		return ret;
-
-	req.sku_enable = phy->sku_path_en;
-	req.format_id = TX_POWER_LIMIT_PATH_ENABLE;
 
 	return mt76_mcu_send_msg(&dev->mt76,
 				 MCU_EXT_CMD(TX_POWER_FEATURE_CTRL), &req,
