@@ -2203,17 +2203,31 @@ static int mt7915_mibinfo_band1(struct seq_file *s, void *data)
 static int mt7915_token_read(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
-	int id, count = 0;
+	struct mt76_dev *mdev = &dev->mt76;
+	int id, i;
 	struct mt76_txwi_cache *txwi;
 
 	seq_printf(s, "Cut through token:\n");
 	spin_lock_bh(&dev->mt76.token_lock);
 	idr_for_each_entry(&dev->mt76.token, txwi, id) {
-		seq_printf(s, "%4d ", id);
-		count++;
-		if (count % 8 == 0)
-			seq_printf(s, "\n");
+		seq_printf(s, "%4d (token pending %u ms)\n", id,
+			   jiffies_to_msecs(jiffies - txwi->jiffies));
 	}
+
+	if (!dev->dbdc_support)
+		goto out;
+
+	for (i = 0; i < MT_BAND2; i++) {
+		struct mt76_phy *mphy = mdev->phys[i];
+
+		if (!mphy)
+			continue;
+
+		seq_printf(s, "Band%d consume: %d, free:%d total: %d\n",
+			   i, mphy->tokens, mdev->token_threshold - mphy->tokens,
+			   mdev->token_threshold);
+	}
+out:
 	spin_unlock_bh(&dev->mt76.token_lock);
 	seq_printf(s, "\n");
 
