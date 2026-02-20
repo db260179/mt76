@@ -291,6 +291,15 @@ struct mt7915_air_monitor_ctrl {
 };
 #endif
 
+struct mt7915_scs_ctrl {
+	u64 tx_bytes_last_sec;
+	u64 rx_bytes_last_sec;
+	bool scs_enable;
+	s8 sta_min_rssi;
+	u16 tput;
+	u8 active_sta;
+};
+
 struct mt7915_phy {
 	struct mt76_phy *mt76;
 	struct mt7915_dev *dev;
@@ -365,6 +374,7 @@ struct mt7915_phy {
 
 	struct mt7915_air_monitor_ctrl amnt_ctrl;
 #endif
+	struct mt7915_scs_ctrl scs_ctrl;
 };
 
 #ifdef MTK_DEBUG
@@ -497,6 +507,8 @@ struct mt7915_dev {
 		u16 version;
 	} adie[ADIE_MAX_CNT];
 #endif
+
+	struct delayed_work scs_work;
 
 	bool wmm_pbc_enable;
 	struct work_struct wmm_pbc_work;
@@ -847,6 +859,8 @@ int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value);
 int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val);
 int mt7915_mcu_ipi_hist_ctrl(struct mt7915_phy *phy, void *data, u8 cmd, bool wait_resp);
 int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool wait_resp);
+int mt7915_mcu_set_scs_en(struct mt7915_phy *phy, u8 enable);
+void mt7915_mcu_scs_sta_poll(struct work_struct *work);
 
 #ifdef MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);

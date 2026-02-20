@@ -5138,3 +5138,121 @@ int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val)
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SWLNA_ACI_CTRL), &req,
 				 sizeof(req), NULL);
 }
+
+int mt7915_mcu_set_scs_en(struct mt7915_phy *phy, u8 enable)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		__le32 subcmd;
+		u8 band_idx;
+		u8 enable;
+	} __packed req = {
+		.subcmd = cpu_to_le32(SCS_ENABLE),
+		.band_idx = phy->mt76->band_idx,
+		.enable = enable + 1,
+	};
+
+	phy->scs_ctrl.scs_enable = !!enable;
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SCS_FEATURE_CTRL),
+				 &req, sizeof(req), NULL);
+}
+
+void mt7915_sta_scs_para(void *data, struct ieee80211_sta *sta)
+{
+#define SCS_ACTIVE_STA_CRITERIA_2M 250000
+	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_phy *poll_phy = (struct mt7915_phy *)data;
+	u8 band_idx = msta->wcid.phy_idx;
+	s64 tx_bytes_last_sec, rx_bytes_last_sec;
+	u64 total_bytes_last_sec;
+
+	if (band_idx > MT_BAND1)
+		return;
+
+	tx_bytes_last_sec = (s64)msta->wcid.stats.tx_bytes -
+			    (s64)msta->wcid.stats.last_tx_bytes;
+	rx_bytes_last_sec = (s64)msta->wcid.stats.rx_bytes -
+			    (s64)msta->wcid.stats.last_rx_bytes;
+
+	/**
+	 * Since wo reports rx stats every 900ms, it needs to be converted as
+	 * statistics every one second.
+	 */
+	rx_bytes_last_sec = rx_bytes_last_sec / 9 * 10;
+
+	poll_phy->scs_ctrl.tx_bytes_last_sec += tx_bytes_last_sec;
+	poll_phy->scs_ctrl.rx_bytes_last_sec += rx_bytes_last_sec;
+
+	total_bytes_last_sec = tx_bytes_last_sec + rx_bytes_last_sec;
+	if (total_bytes_last_sec > SCS_ACTIVE_STA_CRITERIA_2M) {
+		poll_phy->scs_ctrl.tput += total_bytes_last_sec >> 17;
+		poll_phy->scs_ctrl.active_sta++;
+	}
+
+	msta->wcid.stats.last_tx_bytes = msta->wcid.stats.tx_bytes;
+	msta->wcid.stats.last_rx_bytes = msta->wcid.stats.rx_bytes;
+
+	if (poll_phy->scs_ctrl.sta_min_rssi > msta->ack_signal)
+		poll_phy->scs_ctrl.sta_min_rssi = msta->ack_signal;
+}
+
+int mt7915_mcu_set_scs_stats(struct mt7915_phy *phy)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		__le32 subcmd;
+		u8 band_idx;
+		u8 active_sta;
+		__le16 tput;
+		bool rx_only_mode;
+		u8 __rsv;
+		s8 min_rssi;
+	} __packed req = {
+		.subcmd = cpu_to_le32(SCS_SEND_DATA),
+		.band_idx = phy->mt76->band_idx,
+		.active_sta = phy->scs_ctrl.active_sta,
+		.tput = cpu_to_le16(phy->scs_ctrl.tput),
+		.rx_only_mode = false,
+		.min_rssi = phy->scs_ctrl.sta_min_rssi,
+	};
+
+	/* Rx only mode is that Rx percentage is larger than 90% */
+	if (phy->scs_ctrl.tx_bytes_last_sec < phy->scs_ctrl.rx_bytes_last_sec / 9)
+		req.rx_only_mode = true;
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SCS_FEATURE_CTRL),
+				 &req, sizeof(req), NULL);
+}
+
+void mt7915_mcu_scs_sta_poll(struct work_struct *work)
+{
+	struct mt7915_dev *dev = container_of(work, struct mt7915_dev,
+					      scs_work.work);
+	struct mt7915_phy *phy;
+	bool scs_enable_flag = false;
+	u8 i;
+
+	for (i = MT_BAND0; i < MT_BAND2; i++) {
+		if (!dev->mt76.phys[i])
+			continue;
+
+		phy = dev->mt76.phys[i]->priv;
+		if (!phy->scs_ctrl.scs_enable ||
+		    !test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+			continue;
+
+		ieee80211_iterate_stations_atomic(dev->mt76.phys[i]->hw,
+						  mt7915_sta_scs_para, phy);
+
+		mt7915_mcu_set_scs_stats(phy);
+
+		memset(&phy->scs_ctrl, 0, sizeof(phy->scs_ctrl));
+		phy->scs_ctrl.scs_enable = true;
+
+		scs_enable_flag = true;
+	}
+
+	if (scs_enable_flag)
+		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
+}

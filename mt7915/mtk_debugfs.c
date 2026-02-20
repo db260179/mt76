@@ -3809,6 +3809,29 @@ mt7915_sw_aci_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_sw_aci, NULL,
 			 mt7915_sw_aci_set, "%llx\n");
 
+static int
+mt7915_scs_enable_set(void *data, u64 val)
+{
+	struct mt7915_phy *phy = data;
+	int ret;
+
+	/* Enable scs if and only if WED Rx (2.0 and after) is supported */
+	if (!mtk_wed_device_active(&phy->dev->mt76.mmio.wed) ||
+	    !mtk_wed_get_rx_capa(&phy->dev->mt76.mmio.wed))
+		return 0;
+
+	ret = mt7915_mcu_set_scs_en(phy, (u8) val);
+	if (ret)
+		return ret;
+
+	if (phy->scs_ctrl.scs_enable)
+		ieee80211_queue_delayed_work(phy->mt76->hw, &phy->dev->scs_work, HZ);
+
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_scs_enable, NULL,
+			 mt7915_scs_enable_set, "%lld\n");
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -3901,6 +3924,8 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,
 				    mt7915_show_eeprom_mode);
+				    
+	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
 	return 0;
 }
 #endif

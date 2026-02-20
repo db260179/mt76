@@ -1453,6 +1453,8 @@ mt7915_mac_full_reset(struct mt7915_dev *dev)
 
 	mt76_abort_scan(&dev->mt76);
 
+	cancel_delayed_work_sync(&dev->scs_work);
+
 	mutex_lock(&dev->mt76.mutex);
 	for (i = 0; i < 10; i++) {
 		if (!mt7915_mac_restart(dev))
@@ -1540,7 +1542,7 @@ void mt7915_mac_reset_work(struct work_struct *work)
 	}
 
 	mutex_lock(&dev->mt76.mutex);
-
+	cancel_delayed_work_sync(&dev->scs_work);
 	mt76_worker_disable(&dev->mt76.tx_worker);
 	mt76_for_each_q_rx(&dev->mt76, i)
 		napi_disable(&dev->mt76.napi[i]);
@@ -1606,6 +1608,10 @@ void mt7915_mac_reset_work(struct work_struct *work)
 		ieee80211_queue_delayed_work(ext_phy->hw,
 					     &phy2->mt76->mac_work,
 					     MT7915_WATCHDOG_TIME);
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+	    mtk_wed_get_rx_capa(&dev->mt76.mmio.wed))
+		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
 
 	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
 		 wiphy_name(dev->mt76.hw->wiphy));
