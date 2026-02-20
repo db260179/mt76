@@ -2852,6 +2852,16 @@ static int mt7915_sta_tx_amsdu_set(void *data, u64 tx_amsdu)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_tx_amsdu, NULL,
 			 mt7915_sta_tx_amsdu_set, "%llx\n");
 
+static int mt7915_muru_set_prot_thr(void *data, u64 val)
+{
+	struct mt7915_phy *phy = data;
+
+	return mt7915_mcu_set_mu_prot_frame_th(phy, (u32)val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_muru_set_prot_thr, NULL,
+			 mt7915_muru_set_prot_thr, "%lld\n");
+
 static int mt7915_red_enable_set(void *data, u64 en)
 {
 	struct mt7915_dev *dev = data;
@@ -3868,6 +3878,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "fw_wm_info", dir,
 				    mt7915_fw_wm_info_read);
 
+	debugfs_create_file("prot_thr", 0200, dir, phy, &fops_muru_set_prot_thr);
 	debugfs_create_file("red_en", 0600, dir, dev,
 			    &fops_red_en);
 	debugfs_create_file("red_show_sta", 0600, dir, dev,
