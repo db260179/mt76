@@ -853,6 +853,7 @@ void mt7915_csi_mac_filter_clear(struct mt7915_phy *phy);
 void mt7915_vendor_amnt_fill_rx(struct mt7915_phy *phy, struct sk_buff *skb);
 int mt7915_vendor_amnt_sta_remove(struct mt7915_phy *phy,
 				  struct ieee80211_sta *sta);
+int mt7915_mcu_set_lpi(struct mt7915_phy *phy, bool en);
 #endif
 int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compensation);
 int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value);

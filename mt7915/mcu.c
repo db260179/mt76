@@ -1574,7 +1574,8 @@ mt7915_mcu_set_spe_idx(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
 	struct mt76_phy *mphy = mvif->phy->mt76;
-	u8 spe_idx = mt76_connac_spe_idx(mphy->antenna_mask);
+	u8 spe_idx = mphy->mgmt_pwr_enhance ?
+		     0 : mt76_connac_spe_idx(mphy->antenna_mask);
 
 	return mt7915_mcu_set_fixed_rate_ctrl(dev, vif, sta, &msta->wcid,
 					      &spe_idx, RATE_PARAM_SPE_UPDATE);
@@ -3554,6 +3555,22 @@ mt7915_update_txpower(struct mt7915_phy *phy, int tx_power)
 		mphy->txpower_cur = e2p_power_limit;
 }
 
+int mt7915_get_psd_country(char *country)
+{
+	char country_list[][3] = {"US", "KR", "BR", "CL", "MY", ""};
+	int i;
+
+	if (strlen(country) != 2)
+		return 0;
+
+	for (i = 0; country_list[i][0] != '\0'; i++) {
+		if (!strncmp(country, country_list[i], 2))
+			return 1;
+	}
+
+	return 0;
+}
+
 int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 {
 #define TX_POWER_LIMIT_TABLE_RATE	0
@@ -3584,14 +3601,37 @@ int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 		mt7915_update_txpower(phy, tx_power);
 		return 0;
 	}
-
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL,
 				 sizeof(hdr) + MT7915_SKU_RATE_NUM);
 	if (!skb)
 		return -ENOMEM;
 
 	skb_put_data(skb, &hdr, sizeof(hdr));
-	skb_put_data(skb, &la.cck, len[SKU_CCK] + len[SKU_OFDM]);
+	skb_put_data(skb, &la.cck, len[SKU_CCK]);
+
+	if (phy->mt76->cap.has_6ghz && mphy->beacon_dup &&
+	    !mt7915_get_psd_country(dev->mt76.alpha2)) {
+		switch (mphy->chandef.width) {
+		case NL80211_CHAN_WIDTH_20:
+			skb_put_data(skb, &la.mcs[0], len[SKU_OFDM]);
+			break;
+		case NL80211_CHAN_WIDTH_40:
+			skb_put_data(skb, &la.mcs[1], len[SKU_OFDM]);
+			break;
+		case NL80211_CHAN_WIDTH_80:
+			skb_put_data(skb, &la.mcs[2], len[SKU_OFDM]);
+			break;
+		case NL80211_CHAN_WIDTH_160:
+			skb_put_data(skb, &la.mcs[3], len[SKU_OFDM]);
+			break;
+		default:
+			skb_put_data(skb, &la.ofdm, len[SKU_OFDM]);
+			break;
+		}
+	} else {
+		skb_put_data(skb, &la.ofdm, len[SKU_OFDM]);
+	}
+
 	skb_put_data(skb, &la.mcs[0], len[SKU_HT_BW20]);
 	skb_put_data(skb, &la.mcs[1], len[SKU_HT_BW40]);
 
@@ -3620,8 +3660,34 @@ int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 	hdr.limit_type = TX_POWER_LIMIT_TABLE_PATH;
 	skb_put_data(skb, &hdr, sizeof(hdr));
 	skb_put_data(skb, &la.path.cck, sizeof(la.path.cck));
-	skb_put_data(skb, &la.path.ofdm, sizeof(la.path.ofdm));
-	skb_put_data(skb, &la.path.ofdm_bf[1], sizeof(la.path.ofdm_bf) - 1);
+
+	if (phy->mt76->cap.has_6ghz && mphy->beacon_dup) {
+		switch (mphy->chandef.width) {
+		case NL80211_CHAN_WIDTH_20:
+			skb_put_data(skb, &la.path.ru[3], sizeof(la.path.ofdm));
+			skb_put_data(skb, &la.path.ru_bf[3][1], sizeof(la.path.ofdm_bf) - 1);
+			break;
+		case NL80211_CHAN_WIDTH_40:
+			skb_put_data(skb, &la.path.ru[4], sizeof(la.path.ofdm));
+			skb_put_data(skb, &la.path.ru_bf[4][1], sizeof(la.path.ofdm_bf) - 1);
+			break;
+		case NL80211_CHAN_WIDTH_80:
+			skb_put_data(skb, &la.path.ru[5], sizeof(la.path.ofdm));
+			skb_put_data(skb, &la.path.ru_bf[5][1], sizeof(la.path.ofdm_bf) - 1);
+			break;
+		case NL80211_CHAN_WIDTH_160:
+			skb_put_data(skb, &la.path.ru[6], sizeof(la.path.ofdm));
+			skb_put_data(skb, &la.path.ru_bf[6][1], sizeof(la.path.ofdm_bf) - 1);
+			break;
+		default:
+			skb_put_data(skb, &la.path.ofdm, sizeof(la.path.ofdm));
+			skb_put_data(skb, &la.path.ofdm_bf[1], sizeof(la.path.ofdm_bf) - 1);
+			break;
+		}
+	} else {
+		skb_put_data(skb, &la.path.ofdm, sizeof(la.path.ofdm));
+		skb_put_data(skb, &la.path.ofdm_bf[1], sizeof(la.path.ofdm_bf) - 1);
+	}
 
 	/* HT20 and HT40 */
 	skb_put_data(skb, &la.path.ru[3], sizeof(la.path.ru[3]));
@@ -3696,6 +3762,21 @@ int mt7915_mcu_get_txpower_sku(struct mt7915_phy *phy, s8 *txpower, int len,
 	dev_kfree_skb(skb);
 
 	return 0;
+}
+
+int mt7915_mcu_set_lpi(struct mt7915_phy *phy, bool en)
+{
+	struct mt76_dev *mdev = &(phy->dev->mt76);
+	struct {
+		u8 enable;
+		u8 psd_limit;
+		u8 _rsv[2];
+	} __packed req = {
+		.enable = en,
+		.psd_limit = en ? mt7915_get_psd_country(mdev->alpha2) : 0,
+	};
+	return mt76_mcu_send_msg(mdev, MCU_EXT_CMD(LPI_CTRL), &req,
+				 sizeof(req), false);
 }
 
 int mt7915_mcu_set_test_param(struct mt7915_dev *dev, u8 param, bool test_mode,

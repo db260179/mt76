@@ -1309,7 +1309,6 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 {
 	struct mt7915_phy *phy = file->private;
 	struct mt76_phy *mphy = phy->mt76;
-	struct mt76_dev *dev = mphy->dev;
 	struct {
 		u8 category;
 		u8 rsv1;
@@ -1386,7 +1385,7 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 	seq_printf(file, "    Theraml Compensation Value: %d\n",
 		   basic_info.thermal_compensate_value);
 
-	np = mt76_find_power_limits_node(dev);
+	np = mt76_find_power_limits_node(mphy);
 	seq_printf(file, "    RegDB:  %s\n", !np ? "enable" : "disable");
 
 out:
