@@ -19,6 +19,7 @@
  *
  * @MT76_TM_ATTR_MTD_PART: mtd partition used for eeprom data (string)
  * @MT76_TM_ATTR_MTD_OFFSET: offset of eeprom data within the partition (u32)
+ * @MT76_TM_ATTR_BAND_IDX: band idx of the chip (u8)
  *
  * @MT76_TM_ATTR_SKU_EN: config txpower sku is enabled or disabled in testmode (u8)
  * @MT76_TM_ATTR_TX_COUNT: configured number of frames to send when setting
@@ -41,6 +42,11 @@
  *
  * @MT76_TM_ATTR_STATS: statistics (nested, see &enum mt76_testmode_stats_attr)
  *
+ * @MT76_TM_ATTR_PRECAL: Pre-cal data (u8)
+ * @MT76_TM_ATTR_PRECAL_INFO: group size, dpd size, dpd_info, transmit size,
+ *                            eeprom cal indicator (u32),
+ *                            dpd_info = [dpd_per_chan_size, chan_num_2g,
+ *                                        chan_num_5g, chan_num_6g]
  * @MT76_TM_ATTR_TX_SPE_IDX: tx spatial extension index (u8)
  *
  * @MT76_TM_ATTR_TX_DUTY_CYCLE: packet tx duty cycle (u8)
@@ -68,6 +74,7 @@ enum mt76_testmode_attr {
 
 	MT76_TM_ATTR_MTD_PART,
 	MT76_TM_ATTR_MTD_OFFSET,
+	MT76_TM_ATTR_BAND_IDX,
 
 	MT76_TM_ATTR_SKU_EN,
 	MT76_TM_ATTR_TX_COUNT,
@@ -87,6 +94,8 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_FREQ_OFFSET,
 
 	MT76_TM_ATTR_STATS,
+	MT76_TM_ATTR_PRECAL,
+	MT76_TM_ATTR_PRECAL_INFO,
 
 	MT76_TM_ATTR_TX_SPE_IDX,
 
@@ -188,6 +197,14 @@ enum mt76_testmode_state {
 	MT76_TM_STATE_TX_FRAMES,
 	MT76_TM_STATE_RX_FRAMES,
 	MT76_TM_STATE_TX_CONT,
+	MT76_TM_STATE_GROUP_PREK,
+	MT76_TM_STATE_GROUP_PREK_DUMP,
+	MT76_TM_STATE_GROUP_PREK_CLEAN,
+	MT76_TM_STATE_DPD_2G,
+	MT76_TM_STATE_DPD_5G,
+	MT76_TM_STATE_DPD_6G,
+	MT76_TM_STATE_DPD_DUMP,
+	MT76_TM_STATE_DPD_CLEAN,
 	MT76_TM_STATE_ON,
 
 	/* keep last */
