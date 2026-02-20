@@ -5214,3 +5214,18 @@ int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value)
 
 	return 0;
 }
+
+int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val)
+{
+#define SWLNA_ENABLE 6
+	struct {
+		u32 subcmd;
+		u8 enable;
+	} req = {
+		.subcmd = SWLNA_ENABLE,
+		.enable = val ? 1 : 0,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SWLNA_ACI_CTRL), &req,
+				 sizeof(req), NULL);
+}
