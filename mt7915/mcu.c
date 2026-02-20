@@ -529,6 +529,9 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_BF_STATUS_READ:
 		mt7915_tm_txbf_status_read(dev, skb);
 		break;
+	case MCU_EXT_EVENT_RF_TEST:
+		mt7915_tm_rf_test_event(dev, skb);
+		break;
 #endif
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7915_mcu_rx_bss_acq_pkt_cnt(dev, skb);
