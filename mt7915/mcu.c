@@ -3689,6 +3689,8 @@ int mt7915_mcu_get_txpower_sku(struct mt7915_phy *phy, s8 *txpower, int len,
 			txpower[i] = res[i][req.band_idx];
 	} else if (category == TX_POWER_INFO_PATH) {
 		memcpy(txpower, skb->data + 4, len);
+	} else if (category == TX_POWER_INFO_BASIC) {
+		memcpy(txpower, skb->data, len);
 	}
 
 	dev_kfree_skb(skb);
