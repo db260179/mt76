@@ -1818,7 +1818,7 @@ mt7915_get_csi_stats(struct file *file, char __user *user_buf,
 	struct csi_mac_filter *current_mac, *tmp_mac;
 	static const size_t sz = 4096;
 	char *buf;
-	u32 reg, len = 0;
+	u32 len = 0;
 	int ret;
 
 	buf = kzalloc(sz, GFP_KERNEL);
@@ -1841,7 +1841,6 @@ mt7915_get_csi_stats(struct file *file, char __user *user_buf,
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
-out:
 	kfree(buf);
 	return ret;
 }
