@@ -493,6 +493,9 @@ static int mt7915_config(struct ieee80211_hw *hw, int radio_idx,
 			mutex_unlock(&dev->mt76.mutex);
 		}
 #endif
+		ret = mt7915_mcu_set_edcca(phy, EDCCA_CTRL_SET_EN, NULL, 0);
+			if (ret)
+				return ret;	
 		ret = mt76_update_channel(phy->mt76);
 		if (ret)
 			return ret;
