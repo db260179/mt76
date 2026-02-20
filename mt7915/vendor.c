@@ -39,6 +39,7 @@ wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
 static const struct nla_policy
 mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 	[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] = {.type = NLA_U8 },
+	[MTK_VENDOR_ATTR_MU_CTRL_DUMP] = {.type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1161,6 +1162,28 @@ static int mt7915_vendor_mu_ctrl(struct wiphy *wiphy,
 	return 0;
 }
 
+
+static int
+mt7915_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     struct sk_buff *skb, const void *data, int data_len,
+			     unsigned long *storage)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
+	int len = 0;
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	if (nla_put_u8(skb, MTK_VENDOR_ATTR_MU_CTRL_DUMP, phy->muru_onoff))
+		return -ENOMEM;
+	len += 1;
+
+	return len;
+}
+
+
 static int
 mt7915_vendor_phy_capa_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 			     struct sk_buff *skb, const void *data, int data_len,
@@ -1347,6 +1370,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_mu_ctrl,
+		.dumpit = mt7915_vendor_mu_ctrl_dump,
 		.policy = mu_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_MU_CTRL_MAX,
 	},
