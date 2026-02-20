@@ -3,6 +3,7 @@
 #include "mt7915_debug.h"
 #include "mac.h"
 #include "mcu.h"
+#include "eeprom.h"
 
 #ifdef MTK_DEBUG
 #define LWTBL_IDX2BASE_ID		GENMASK(14, 8)
@@ -3728,6 +3729,47 @@ static int mt7915_fw_wm_info_read(struct seq_file *s, void *data)
 	return 0;
 }
 
+static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
+{
+	struct mt7915_dev *dev = dev_get_drvdata(s->private);
+	struct mt76_dev *mdev = &dev->mt76;
+	u8 free_block_num = 0;
+#ifdef CONFIG_NL80211_TESTMODE
+	const char *mtd_name = mdev->test_mtd.name;
+	u32 mtd_offset = mdev->test_mtd.offset;
+#else
+	const char *mtd_name = NULL;
+	u32 mtd_offset;
+#endif
+
+	seq_printf(s, "Current eeprom mode:\n");
+
+	switch (dev->eeprom_mode) {
+	case DEFAULT_BIN_MODE:
+		seq_printf(s, "   default bin mode\n   filename = %s\n", mt7915_eeprom_name(dev));
+		break;
+	case EFUSE_MODE:
+		seq_printf(s, "   efuse mode\n");
+		mt7915_mcu_get_eeprom_free_block(dev, &free_block_num);
+		seq_printf(s, "   free block number = %d\n", free_block_num);
+		break;
+	case FLASH_MODE:
+		if (mtd_name)
+			seq_printf(s, "   flash mode\n   mtd name = %s\n   flash offset = 0x%x\n",
+				   mtd_name, mtd_offset);
+		else
+			seq_printf(s, "   flash mode\n");
+		break;
+	case BIN_FILE_MODE:
+		seq_printf(s, "   bin file mode\n   filename = %s\n", mt7915_eeprom_name(dev));
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -3814,6 +3856,8 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 
+	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,
+				    mt7915_show_eeprom_mode);
 	return 0;
 }
 #endif
