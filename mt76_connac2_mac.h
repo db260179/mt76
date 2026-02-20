@@ -355,6 +355,13 @@ enum tx_port_idx {
 	MT_TX_PORT_IDX_MCU
 };
 
+enum tx_bw_idx {
+	MT_TX_BW_IDX_20,
+	MT_TX_BW_IDX_40,
+	MT_TX_BW_IDX_80,
+	MT_TX_BW_IDX_160,
+};
+
 enum tx_frag_idx {
 	MT_TX_FRAG_NONE,
 	MT_TX_FRAG_FIRST,

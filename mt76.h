@@ -959,6 +959,9 @@ struct mt76_phy {
 	u8 macaddr[ETH_ALEN];
 
 	int txpower_cur;
+	u8 beacon_dup;
+	u8 mgmt_pwr_enhance;
+	u8 sku_idx;
 	u8 antenna_mask;
 	u16 chainmask;
 
@@ -2065,7 +2068,7 @@ mt76_mcu_skb_send_msg(struct mt76_dev *dev, struct sk_buff *skb, int cmd,
 void mt76_set_irq_mask(struct mt76_dev *dev, u32 addr, u32 clear, u32 set);
 
 struct device_node *
-mt76_find_power_limits_node(struct mt76_dev *dev);
+mt76_find_power_limits_node(struct mt76_phy *phy);
 struct device_node *
 mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan);
 

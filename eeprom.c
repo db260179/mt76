@@ -250,8 +250,9 @@ static bool mt76_string_prop_find(struct property *prop, const char *str)
 }
 
 struct device_node *
-mt76_find_power_limits_node(struct mt76_dev *dev)
+mt76_find_power_limits_node(struct mt76_phy *phy)
 {
+	struct mt76_dev *dev = phy->dev;
 	struct device_node *np = dev->dev->of_node;
 	const char *const region_names[] = {
 		[NL80211_DFS_UNSET] = "ww",
@@ -261,6 +262,7 @@ mt76_find_power_limits_node(struct mt76_dev *dev)
 	};
 	struct device_node *cur, *fallback = NULL;
 	const char *region_name = NULL;
+	char index[4] = {0};
 
 	if (dev->region < ARRAY_SIZE(region_names))
 		region_name = region_names[dev->region];
@@ -269,17 +271,20 @@ mt76_find_power_limits_node(struct mt76_dev *dev)
 	if (!np)
 		return NULL;
 
+	snprintf(index, sizeof(index), "%d", phy->sku_idx);
 	for_each_child_of_node(np, cur) {
 		struct property *country = of_find_property(cur, "country", NULL);
 		struct property *regd = of_find_property(cur, "regdomain", NULL);
+		struct property *sku_index = of_find_property(cur, "sku-index", NULL);
 
 		if (!country && !regd) {
 			fallback = cur;
 			continue;
 		}
 
-		if (mt76_string_prop_find(country, dev->alpha2) ||
-		    mt76_string_prop_find(regd, region_name)) {
+		if ((mt76_string_prop_find(country, dev->alpha2) ||
+		    mt76_string_prop_find(regd, region_name)) &&
+		    (!phy->sku_idx || mt76_string_prop_find(sku_index, index))) {
 			of_node_put(np);
 			return cur;
 		}
@@ -487,7 +492,7 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 	if (!IS_ENABLED(CONFIG_OF))
 		return target_power;
 
-	np = mt76_find_power_limits_node(dev);
+	np = mt76_find_power_limits_node(phy);
 	if (!np)
 		return target_power;
 
