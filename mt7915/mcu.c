@@ -5094,6 +5094,17 @@ int mt7915_mcu_set_rfeature_trig_type(struct mt7915_phy *phy, u8 enable, u8 trig
 		return 0;
 	}
 }
+
+void mt7915_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
+	struct ieee80211_hw *hw = mvif->phy->mt76->hw;
+	u8 val = *((u8 *)data);
+
+	vif->bss_conf.enable_beacon = val;
+
+	mt7915_mcu_add_beacon(hw, vif, val);
+}
 #endif
 
 #ifdef MTK_DEBUG
