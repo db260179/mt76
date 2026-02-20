@@ -340,7 +340,6 @@ struct mt7915_phy {
 
 		u8 spe_idx;
 
-		bool bf_en;
 		bool bf_ever_en;
 	} test;
 #endif
@@ -460,7 +459,7 @@ struct mt7915_dev {
 	void __iomem *dcm;
 	void __iomem *sku;
 
-#ifdef CONFIG_NL80211_TESTMODE
+#if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
 	struct {
 		void *txbf_phase_cal;
 		void *txbf_pfmu_data;
@@ -621,6 +620,7 @@ int mt7915_dma_reset(struct mt7915_dev *dev, bool force);
 int mt7915_dma_start(struct mt7915_dev *dev, bool reset, bool wed_reset);
 int mt7915_txbf_init(struct mt7915_dev *dev);
 void mt7915_init_txpower(struct mt7915_phy *phy);
+int mt7915_init_vif(struct mt7915_phy *phy, struct ieee80211_vif *vif, bool bf_en);
 void mt7915_reset(struct mt7915_dev *dev);
 int mt7915_run(struct ieee80211_hw *hw);
 int mt7915_mcu_init(struct mt7915_dev *dev);
@@ -711,9 +711,11 @@ int mt7915_mcu_fw_log_2_host(struct mt7915_dev *dev, u8 type, u8 ctrl);
 int mt7915_mcu_fw_dbg_ctrl(struct mt7915_dev *dev, u32 module, u8 level);
 void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_exit(struct mt7915_dev *dev);
-int mt7915_tm_txbf_status_read(struct mt7915_dev *dev, struct sk_buff *skb);
-void mt7915_tm_rf_test_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_wmm_pbc_work(struct work_struct *work);
+
+#ifdef CONFIG_NL80211_TESTMODE
+void mt7915_tm_rf_test_event(struct mt7915_dev *dev, struct sk_buff *skb);
+#endif
 
 static inline u16 mt7915_wtbl_size(struct mt7915_dev *dev)
 {
@@ -850,6 +852,12 @@ enum {
 	PKT_BIN_DEBUG_RX_RAW,
 };
 
+#endif
+
+#if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
+int mt7915_mcu_txbf_status_read(struct mt7915_dev *dev, struct sk_buff *skb);
+int mt7915_mcu_txbf_profile_tag_read(struct mt7915_phy *phy, u8 pfmu_idx, bool bfer);
+int mt7915_mcu_txbf_sta_rec_read(struct mt7915_dev *dev, u16 wlan_idx);
 #endif
 
 #endif

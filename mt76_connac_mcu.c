@@ -2809,6 +2809,7 @@ int mt76_connac_mcu_bss_basic_tlv(struct sk_buff *skb,
 	u32 type = vif->p2p ? NETWORK_P2P : NETWORK_INFRA;
 	struct bss_info_basic *bss;
 	struct tlv *tlv;
+	struct mt76_testmode_data *td = &phy->test;
 
 	tlv = mt76_connac_mcu_add_tlv(skb, BSS_INFO_BASIC, sizeof(*bss));
 	bss = (struct bss_info_basic *)tlv;
@@ -2868,6 +2869,8 @@ int mt76_connac_mcu_bss_basic_tlv(struct sk_buff *skb,
 		bss->dtim_period = vif->bss_conf.dtim_period;
 		bss->phy_mode = mt76_connac_get_phy_mode(phy, vif,
 							 chandef->chan->band, NULL);
+	} else if (td->bf_en) {
+		memcpy(bss->bssid, vif->addr, ETH_ALEN);
 	} else {
 		memcpy(bss->bssid, phy->macaddr, ETH_ALEN);
 	}

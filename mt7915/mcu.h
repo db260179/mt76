@@ -498,16 +498,188 @@ enum {
 };
 
 enum {
+	MT_BF_SOUNDING_OFF = 0,
 	MT_BF_SOUNDING_ON = 1,
 	MT_BF_DATA_PACKET_APPLY = 2,
 	MT_BF_PFMU_TAG_READ = 5,
 	MT_BF_PFMU_TAG_WRITE = 6,
+	MT_BF_STA_REC_READ = 13,
 	MT_BF_PHASE_CAL = 14,
 	MT_BF_IBF_PHASE_COMP = 15,
 	MT_BF_PROFILE_WRITE_ALL = 17,
 	MT_BF_TYPE_UPDATE = 20,
 	MT_BF_MODULE_UPDATE = 25
 };
+
+#if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
+struct mt7915_pfmu_tag1 {
+	__le32 pfmu_idx:10;
+	__le32 ebf:1;
+	__le32 data_bw:2;
+	__le32 lm:2;
+	__le32 is_mu:1;
+	__le32 nr:3, nc:3;
+	__le32 codebook:2;
+	__le32 ngroup:2;
+	__le32 _rsv:2;
+	__le32 invalid_prof:1;
+	__le32 rmsd:3;
+
+	__le32 col_id1:6, row_id1:10;
+	__le32 col_id2:6, row_id2:10;
+	__le32 col_id3:6, row_id3:10;
+	__le32 col_id4:6, row_id4:10;
+
+	__le32 ru_start_id:7;
+	__le32 _rsv1:1;
+	__le32 ru_end_id:7;
+	__le32 _rsv2:1;
+	__le32 mob_cal_en:1;
+	__le32 _rsv3:15;
+
+	__le32 snr_sts0:8, snr_sts1:8, snr_sts2:8, snr_sts3:8;
+	__le32 snr_sts4:8, snr_sts5:8, snr_sts6:8, snr_sts7:8;
+
+	__le32 _rsv4;
+} __packed;
+
+struct mt7915_pfmu_tag2 {
+	__le32 smart_ant:24;
+	__le32 se_idx:5;
+	__le32 _rsv:3;
+
+	__le32 _rsv1:8;
+	__le32 rmsd_thres:3;
+	__le32 _rsv2:5;
+	__le32 ibf_timeout:8;
+	__le32 _rsv3:8;
+
+	__le32 _rsv4:16;
+	__le32 ibf_data_bw:2;
+	__le32 ibf_nc:3;
+	__le32 ibf_nr:3;
+	__le32 ibf_ru:8;
+
+	__le32 mob_delta_t:8;
+	__le32 mob_lq_result:7;
+	__le32 _rsv5:1;
+	__le32 _rsv6:16;
+
+	__le32 _rsv7;
+} __packed;
+
+struct mt7915_pfmu_tag {
+	struct mt7915_pfmu_tag1 t1;
+	struct mt7915_pfmu_tag2 t2;
+};
+
+struct mt7915_bf_status_hdr {
+	u8 format_id;
+	u8 bw;
+	u16 subcarrier_idx;
+	bool bfer;
+	u8 rsv[3];
+} __packed;
+
+struct mt7915_bf_status {
+	struct mt7915_bf_status_hdr hdr;
+	u8 buf[1000];
+} __packed;
+
+struct mt7915_txbf_phase_out {
+	u8 c0_l;
+	u8 c1_l;
+	u8 c2_l;
+	u8 c3_l;
+	u8 c0_m;
+	u8 c1_m;
+	u8 c2_m;
+	u8 c3_m;
+	u8 c0_h;
+	u8 c1_h;
+	u8 c2_h;
+	u8 c3_h;
+	u8 c0_uh;
+	u8 c1_uh;
+	u8 c2_uh;
+	u8 c3_uh;
+};
+
+struct mt7915_txbf_phase {
+	u8 status;
+	struct {
+		u8 r0_uh;
+		u8 r0_h;
+		u8 r0_m;
+		u8 r0_l;
+		u8 r0_ul;
+		u8 r1_uh;
+		u8 r1_h;
+		u8 r1_m;
+		u8 r1_l;
+		u8 r1_ul;
+		u8 r2_uh;
+		u8 r2_h;
+		u8 r2_m;
+		u8 r2_l;
+		u8 r2_ul;
+		u8 r3_uh;
+		u8 r3_h;
+		u8 r3_m;
+		u8 r3_l;
+		u8 r3_ul;
+		u8 r2_uh_sx2;
+		u8 r2_h_sx2;
+		u8 r2_m_sx2;
+		u8 r2_l_sx2;
+		u8 r2_ul_sx2;
+		u8 r3_uh_sx2;
+		u8 r3_h_sx2;
+		u8 r3_m_sx2;
+		u8 r3_l_sx2;
+		u8 r3_ul_sx2;
+		u8 m_t0_h;
+		u8 m_t1_h;
+		u8 m_t2_h;
+		u8 m_t2_h_sx2;
+		u8 r0_reserved;
+		u8 r1_reserved;
+		u8 r2_reserved;
+		u8 r3_reserved;
+		u8 r2_sx2_reserved;
+		u8 r3_sx2_reserved;
+	} phase;
+};
+
+struct mt7915_pfmu_data {
+	__le16 subc_idx;
+	__le16 phi11;
+	__le16 phi21;
+	__le16 phi31;
+};
+
+struct mt7915_ibf_cal_info {
+	u8 format_id;
+	u8 group_l_m_n;
+	u8 group;
+	bool sx2;
+	u8 status;
+	u8 cal_type;
+	u8 _rsv[2];
+	u8 buf[1000];
+} __packed;
+
+enum {
+	IBF_PHASE_CAL_UNSPEC,
+	IBF_PHASE_CAL_NORMAL,
+	IBF_PHASE_CAL_VERIFY,
+	IBF_PHASE_CAL_NORMAL_INSTRUMENT,
+	IBF_PHASE_CAL_VERIFY_INSTRUMENT,
+};
+
+#define MT7915_TXBF_SUBCAR_NUM	64
+
+#endif
 
 enum {
 	MURU_SET_ARB_OP_MODE = 14,

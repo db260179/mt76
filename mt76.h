@@ -836,6 +836,7 @@ struct mt76_testmode_data {
 
 	struct list_head tm_entry_list;
 	struct mt76_wcid *cur_entry;
+	struct ieee80211_vif *second_vif;
 	u8 entry_num;
 	union {
 		struct mt76_testmode_entry_data ed;
@@ -864,6 +865,9 @@ struct mt76_testmode_data {
 
 	u8 txbf_act;
 	u16 txbf_param[8];
+	bool is_txbf_dut;
+	bool bf_en;
+	bool ebf;
 
 	u32 tx_pending;
 	u32 tx_queued;

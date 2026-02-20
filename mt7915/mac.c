@@ -750,8 +750,10 @@ mt7915_mac_write_txwi_tm(struct mt7915_phy *phy, __le32 *txwi,
 		val |= MT_TXD6_LDPC;
 
 	txwi[3] &= ~cpu_to_le32(MT_TXD3_SN_VALID);
-	if (phy->test.bf_en)
+	if (td->bf_en && !td->ebf)
 		val |= MT_TXD6_TX_IBF | MT_TXD6_TX_EBF;
+	else if (td->bf_en && td->ebf)
+		val |= MT_TXD6_TX_EBF;
 
 	txwi[6] |= cpu_to_le32(val);
 #endif

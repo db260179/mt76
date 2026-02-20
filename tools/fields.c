@@ -33,7 +33,10 @@ static const char * const testmode_tx_mode[] = {
 };
 
 static const char * const testmode_txbf_act[] = {
+	[MT76_TM_TXBF_ACT_GOLDEN_INIT] = "golden_init",
 	[MT76_TM_TXBF_ACT_INIT] = "init",
+	[MT76_TM_TX_EBF_ACT_GOLDEN_INIT] = "ebf_golden_init",
+	[MT76_TM_TX_EBF_ACT_INIT] = "ebf_init",
 	[MT76_TM_TXBF_ACT_UPDATE_CH] = "update_ch",
 	[MT76_TM_TXBF_ACT_PHASE_COMP] = "phase_comp",
 	[MT76_TM_TXBF_ACT_TX_PREP] = "tx_prep",
@@ -44,6 +47,12 @@ static const char * const testmode_txbf_act[] = {
 	[MT76_TM_TXBF_ACT_PROF_UPDATE_ALL] = "prof_update",
 	[MT76_TM_TXBF_ACT_PROF_UPDATE_ALL_CMD] = "prof_update_all",
 	[MT76_TM_TXBF_ACT_E2P_UPDATE] = "e2p_update",
+	[MT76_TM_TXBF_ACT_TRIGGER_SOUNDING] = "trigger_sounding",
+	[MT76_TM_TXBF_ACT_STOP_SOUNDING] = "stop_sounding",
+	[MT76_TM_TXBF_ACT_PROFILE_TAG_READ] = "pfmu_tag_read",
+	[MT76_TM_TXBF_ACT_PROFILE_TAG_WRITE] = "pfmu_tag_write",
+	[MT76_TM_TXBF_ACT_PROFILE_TAG_INVALID] = "set_invalid_prof",
+	[MT76_TM_TXBF_ACT_STA_REC_READ] = "sta_rec_read",
 };
 
 static const char * const testmode_offchan_bw[] = {

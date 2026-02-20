@@ -525,10 +525,12 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_BCC_NOTIFY:
 		mt7915_mcu_rx_bcc_notify(dev, skb);
 		break;
-#ifdef CONFIG_NL80211_TESTMODE
+#if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
 	case MCU_EXT_EVENT_BF_STATUS_READ:
-		mt7915_tm_txbf_status_read(dev, skb);
+		mt7915_mcu_txbf_status_read(dev, skb);
 		break;
+#endif
+#ifdef CONFIG_NL80211_TESTMODE
 	case MCU_EXT_EVENT_RF_TEST:
 		mt7915_tm_rf_test_event(dev, skb);
 		break;
@@ -820,11 +822,22 @@ int mt7915_mcu_add_bss_info(struct mt7915_phy *phy,
 	if (enable)
 		mt76_connac_mcu_bss_omac_tlv(skb, vif);
 
+	if (vif->type == NL80211_IFTYPE_MONITOR) {
+		struct mt76_testmode_data *td = &phy->mt76->test;
+		struct mt76_wcid *wcid;
+
+		if (!td->aid || list_empty(&td->tm_entry_list))
+			wcid = &mvif->sta.wcid;
+		else
+			wcid = list_first_entry(&td->tm_entry_list, struct mt76_wcid, list);
+
+		mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
+					      wcid->idx, enable);
+		goto out;
+	}
+
 	mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
 				      mvif->sta.wcid.idx, enable);
-
-	if (vif->type == NL80211_IFTYPE_MONITOR)
-		goto out;
 
 	if (enable) {
 		mt7915_mcu_bss_rfch_tlv(skb, vif, phy);
@@ -3754,6 +3767,7 @@ int mt7915_mcu_set_ser(struct mt7915_dev *dev, u8 action, u8 set, u8 band)
 
 int mt7915_mcu_set_txbf(struct mt7915_dev *dev, u8 action)
 {
+#define MT_BF_PROCESSING	4
 	struct {
 		u8 action;
 		union {
@@ -3780,7 +3794,6 @@ int mt7915_mcu_set_txbf(struct mt7915_dev *dev, u8 action)
 		.action = action,
 	};
 
-#define MT_BF_PROCESSING	4
 	switch (action) {
 	case MT_BF_SOUNDING_ON:
 		req.snd.snd_mode = MT_BF_PROCESSING;
@@ -4857,6 +4870,9 @@ int mt7915_mcu_set_txbf_sound_info(struct mt7915_phy *phy, u8 action,
 		req.vht_opt = v1;
 		req.he_opt = v2;
 		req.glo_opt = v3;
+		break;
+	case BF_SND_CFG_INF:
+		req.inf = v1;
 		break;
 	default:
 		return -EINVAL;
