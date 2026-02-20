@@ -73,6 +73,7 @@ enum mtk_vendor_attr_mu_ctrl {
 	MTK_VENDOR_ATTR_MU_CTRL_UNSPEC,
 
 	MTK_VENDOR_ATTR_MU_CTRL_ONOFF,
+	MTK_VENDOR_ATTR_MU_CTRL_DUMP,
 
 	/* keep last */
 	NUM_MTK_VENDOR_ATTRS_MU_CTRL,
