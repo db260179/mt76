@@ -362,12 +362,16 @@ struct mt76_sta_stats {
 	u32 tx_packets;		/* unit: MSDU */
 	u32 tx_retries;
 	u32 tx_failed;
+	u32 tx_total_mpdu_cnt;
+	u32 tx_failed_mpdu_cnt;
+	u32 tx_airtime[4];
 	/* WED RX */
 	u64 rx_bytes;
 	u32 rx_packets;
 	u32 rx_errors;
 	u32 rx_drops;
 	u64 last_rx_bytes;
+	u32 rx_airtime[4];
 };
 
 enum mt76_wcid_flags {
@@ -1494,6 +1498,22 @@ static inline int mt76_decr(int val, int size)
 }
 
 u8 mt76_ac_to_hwq(u8 ac);
+
+static inline u8
+mt76_ac_to_tid(u8 ac)
+{
+	static const u8 ac_to_tid[] = {
+		[IEEE80211_AC_BE] = 0,
+		[IEEE80211_AC_BK] = 1,
+		[IEEE80211_AC_VI] = 4,
+		[IEEE80211_AC_VO] = 6
+	};
+
+	if (WARN_ON(ac >= IEEE80211_NUM_ACS))
+		return 0;
+
+	return ac_to_tid[ac];
+}
 
 static inline struct ieee80211_txq *
 mtxq_to_txq(struct mt76_txq *mtxq)

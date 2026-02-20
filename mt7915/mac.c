@@ -90,18 +90,9 @@ u32 mt7915_mac_wtbl_lmac_addr(struct mt7915_dev *dev, u16 wcid, u8 dw)
 
 static void mt7915_mac_sta_poll(struct mt7915_dev *dev)
 {
-	static const u8 ac_to_tid[] = {
-		[IEEE80211_AC_BE] = 0,
-		[IEEE80211_AC_BK] = 1,
-		[IEEE80211_AC_VI] = 4,
-		[IEEE80211_AC_VO] = 6
-	};
-	struct ieee80211_sta *sta;
 	struct mt7915_sta *msta;
 	struct rate_info *rate;
-	u32 tx_time[IEEE80211_NUM_ACS], rx_time[IEEE80211_NUM_ACS];
 	LIST_HEAD(sta_poll_list);
-	int i;
 
 	spin_lock_bh(&dev->mt76.sta_poll_lock);
 	list_splice_init(&dev->mt76.sta_poll_list, &sta_poll_list);
@@ -110,7 +101,6 @@ static void mt7915_mac_sta_poll(struct mt7915_dev *dev)
 	rcu_read_lock();
 
 	while (true) {
-		bool clear = false;
 		u32 addr, val;
 		u16 idx;
 		s8 rssi[4];
@@ -128,62 +118,6 @@ static void mt7915_mac_sta_poll(struct mt7915_dev *dev)
 
 		idx = msta->wcid.idx;
 
-		/* refresh peer's airtime reporting */
-		addr = mt7915_mac_wtbl_lmac_addr(dev, idx, 20);
-
-		for (i = 0; i < IEEE80211_NUM_ACS; i++) {
-			u32 tx_last = msta->airtime_ac[i];
-			u32 rx_last = msta->airtime_ac[i + 4];
-
-			msta->airtime_ac[i] = mt76_rr(dev, addr);
-			msta->airtime_ac[i + 4] = mt76_rr(dev, addr + 4);
-
-			if (msta->airtime_ac[i] <= tx_last)
-				tx_time[i] = 0;
-			else
-				tx_time[i] = msta->airtime_ac[i] - tx_last;
-
-			if (msta->airtime_ac[i + 4] <= rx_last)
-				rx_time[i] = 0;
-			else
-				rx_time[i] = msta->airtime_ac[i + 4] - rx_last;
-
-			if ((tx_last | rx_last) & BIT(30))
-				clear = true;
-
-			addr += 8;
-		}
-
-		if (clear) {
-			mt7915_mac_wtbl_update(dev, idx,
-					       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
-			memset(msta->airtime_ac, 0, sizeof(msta->airtime_ac));
-		}
-
-		if (!msta->wcid.sta)
-			continue;
-
-		sta = container_of((void *)msta, struct ieee80211_sta,
-				   drv_priv);
-		for (i = 0; i < IEEE80211_NUM_ACS; i++) {
-			u8 queue = mt76_connac_lmac_mapping(i);
-			u32 tx_cur = tx_time[queue];
-			u32 rx_cur = rx_time[queue];
-			u8 tid = ac_to_tid[i];
-
-			if (!tx_cur && !rx_cur)
-				continue;
-
-			ieee80211_sta_register_airtime(sta, tid, tx_cur,
-						       rx_cur);
-		}
-
-		/*
-		 * We don't support reading GI info from txs packets.
-		 * For accurate tx status reporting and AQL improvement,
-		 * we need to make sure that flags match so polling GI
-		 * from per-sta counters directly.
-		 */
 		rate = &msta->wcid.rate;
 		addr = mt7915_mac_wtbl_lmac_addr(dev, idx, 7);
 		val = mt76_rr(dev, addr);
@@ -2146,11 +2080,14 @@ void mt7915_mac_work(struct work_struct *work)
 {
 	struct mt7915_phy *phy;
 	struct mt76_phy *mphy;
+	struct mt76_dev *mdev;
 	bool purged = false;
 
 	mphy = (struct mt76_phy *)container_of(work, struct mt76_phy,
 					       mac_work.work);
 	phy = mphy->priv;
+
+	mdev = mphy->dev;
 
 	mutex_lock(&mphy->dev->mutex);
 
@@ -2165,6 +2102,8 @@ void mt7915_mac_work(struct work_struct *work)
 
 		if (phy->dev->muru_debug)
 			mt7915_mcu_muru_debug_get(phy);
+
+		mt7915_mcu_get_all_sta_info(mdev, MCU_PHY_PER_STA_TXRX_AIR_TIME);
 
 		/* Update DEV-wise information only in
 		 * the MAC work of the first band running.

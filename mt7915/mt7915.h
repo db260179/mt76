@@ -780,6 +780,7 @@ int mt7915_mcu_set_thermal_throttling(struct mt7915_phy *phy, u8 state);
 int mt7915_mcu_set_thermal_protect(struct mt7915_phy *phy);
 int mt7915_mcu_get_rx_rate(struct mt7915_phy *phy, struct ieee80211_vif *vif,
 			   struct ieee80211_sta *sta, struct rate_info *rate);
+int mt7915_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7915_mcu_rdd_background_enable(struct mt7915_phy *phy,
 				     struct cfg80211_chan_def *chandef);
 int mt7915_mcu_wed_wa_tx_stats(struct mt7915_dev *dev, u16 wcid);

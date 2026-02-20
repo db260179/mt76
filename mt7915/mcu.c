@@ -499,6 +499,104 @@ mt7915_mcu_rx_bss_acq_pkt_cnt(struct mt7915_dev *dev, struct sk_buff * skb)
 }
 
 static void
+mt7915_mcu_rx_all_sta_info_event(struct mt7915_dev *dev, struct sk_buff *skb)
+{
+	struct mt7915_mcu_all_sta_info_event *res;
+	u16 i;
+
+	res = (struct mt7915_mcu_all_sta_info_event *)skb->data;
+	for (i = 0; i < le16_to_cpu(res->sta_num); i++) {
+		u8 ac;
+		u16 wlan_idx;
+		bool clear;
+		struct mt76_wcid *wcid;
+		struct ieee80211_sta *sta;
+		u32 prev_tx_airtime, prev_rx_airtime, diff_tx_airtime, diff_rx_airtime;
+
+		switch (res->tag) {
+		case MCU_PHY_PER_STA_TXRX_AIR_TIME:
+			wlan_idx = le16_to_cpu(res->airtime[i].wlan_idx);
+			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			clear = false;
+
+			sta = wcid_to_sta(wcid);
+			if (!sta)
+				continue;
+
+			for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac) {
+				u8 lmac_ac = mt76_connac_lmac_mapping(ac);
+
+				prev_tx_airtime = wcid->stats.tx_airtime[ac];
+				prev_rx_airtime = wcid->stats.rx_airtime[ac];
+				wcid->stats.tx_airtime[ac] = le32_to_cpu(res->airtime[i].tx[lmac_ac]);
+				wcid->stats.rx_airtime[ac] = le32_to_cpu(res->airtime[i].rx[lmac_ac]);
+
+				if (wcid->stats.tx_airtime[ac] >= prev_tx_airtime) {
+					diff_tx_airtime = wcid->stats.tx_airtime[ac] - prev_tx_airtime;
+				} else {
+					diff_tx_airtime = wcid->stats.tx_airtime[ac];
+				}
+
+				if (wcid->stats.rx_airtime[ac] >= prev_rx_airtime) {
+					diff_rx_airtime = wcid->stats.rx_airtime[ac] - prev_rx_airtime;
+				} else {
+					diff_rx_airtime = wcid->stats.rx_airtime[ac];
+				}
+
+				if ((wcid->stats.tx_airtime[ac] | wcid->stats.rx_airtime[ac]) & BIT(30)) {
+						clear = true;
+
+						dev_dbg(dev->mt76.dev,
+							"sta: %02X:%02X:%02X:%02X:%02X:%02X ac: %u tx_read: %u rx_read: %u tx_time: %u rx_time: %u tx_prev: %u rx_prev: %u tx_diff: %u rx_diff: %u clear: %d\n",
+							sta->addr[0], sta->addr[1], sta->addr[2], sta->addr[3], sta->addr[4], sta->addr[5],
+							ac,
+							le32_to_cpu(res->airtime[i].tx[lmac_ac]),
+							le32_to_cpu(res->airtime[i].rx[lmac_ac]),
+							wcid->stats.tx_airtime[ac],
+							wcid->stats.rx_airtime[ac],
+							prev_tx_airtime, prev_rx_airtime,
+							diff_tx_airtime, diff_rx_airtime,
+							clear);
+				}
+
+				if ((diff_tx_airtime > 600000) || (diff_rx_airtime > 600000)) {
+					dev_dbg(dev->mt76.dev,
+						"sta: %02X:%02X:%02X:%02X:%02X:%02X ac: %u tx_read: %u rx_read: %u tx_time: %u rx_time: %u tx_prev: %u rx_prev: %u tx_diff: %u rx_diff: %u\n",
+						sta->addr[0], sta->addr[1], sta->addr[2], sta->addr[3], sta->addr[4], sta->addr[5],
+						ac,
+						le32_to_cpu(res->airtime[i].tx[lmac_ac]),
+						le32_to_cpu(res->airtime[i].rx[lmac_ac]),
+						wcid->stats.tx_airtime[ac],
+						wcid->stats.rx_airtime[ac],
+						prev_tx_airtime, prev_rx_airtime,
+						diff_tx_airtime, diff_rx_airtime);
+
+					if (diff_tx_airtime > 600000)
+						diff_tx_airtime = 0;
+					if (diff_rx_airtime > 600000)
+						diff_rx_airtime = 0;
+				}
+
+				ieee80211_sta_register_airtime(sta, mt76_ac_to_tid(ac),
+					diff_tx_airtime, diff_rx_airtime);
+			}
+
+			if (clear) {
+				dev_dbg(dev->mt76.dev,
+					"sta: %02X:%02X:%02X:%02X:%02X:%02X reset airtime counters\n",
+					sta->addr[0], sta->addr[1], sta->addr[2], sta->addr[3], sta->addr[4], sta->addr[5]);
+
+				mt7915_mac_wtbl_update(dev, wcid->idx,
+						       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+static void
 mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 {
 	struct mt76_connac2_mcu_rxd *rxd;
@@ -538,6 +636,9 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7915_mcu_rx_bss_acq_pkt_cnt(dev, skb);
 		break;
+	case MCU_EXT_EVENT_GET_ALL_STA_STATS:
+		mt7915_mcu_rx_all_sta_info_event(dev, skb);
+		break;
 	default:
 		break;
 	}
@@ -570,6 +671,7 @@ void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	     rxd->ext_eid == MCU_EXT_EVENT_PS_SYNC ||
 	     rxd->ext_eid == MCU_EXT_EVENT_BCC_NOTIFY ||
 	     rxd->ext_eid == MCU_EXT_EVENT_BF_STATUS_READ ||
+	     rxd->ext_eid == MCU_EXT_EVENT_GET_ALL_STA_STATS ||
 	     !rxd->seq) &&
 	     !(rxd->eid == MCU_CMD_EXT_CID &&
 	       rxd->ext_eid == MCU_EXT_EVENT_WA_TX_STAT))
@@ -5530,4 +5632,17 @@ int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action)
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(THERMAL_DEBUG), &req,
 				 sizeof(req), true);
+}
+
+int mt7915_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag)
+{
+	struct {
+		u8 tag;
+		u8 rsv[3];
+	} __packed req = {
+		.tag = tag,
+	};
+
+	return mt76_mcu_send_msg(dev, MCU_EXT_CMD(GET_ALL_STA_STATS),
+				&req, sizeof(req), false);
 }

@@ -714,6 +714,22 @@ enum {
 	SER_RECOVER
 };
 
+struct mt7915_mcu_all_sta_info_event {
+	struct mt76_connac2_mcu_rxd rxd;
+
+	u8 tag;
+	u8 more;
+	__le16 sta_num;
+
+	union {
+		struct {
+			__le16 wlan_idx;
+			__le32 tx[IEEE80211_NUM_ACS];
+			__le32 rx[IEEE80211_NUM_ACS];
+		} airtime[0] __packed;
+	} __packed;
+} __packed;
+
 #define MT7915_MAX_BEACON_SIZE		1308
 #define MT7915_BEACON_UPDATE_SIZE	(sizeof(struct sta_req_hdr) +	\
 					 sizeof(struct bss_info_bcn) +	\
