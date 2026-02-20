@@ -454,6 +454,8 @@ struct mt76_txwi_cache {
 	struct list_head list;
 	dma_addr_t dma_addr;
 
+	unsigned long jiffies;
+
 	union {
 		struct sk_buff *skb;
 		void *ptr;
