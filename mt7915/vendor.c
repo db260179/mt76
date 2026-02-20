@@ -114,6 +114,11 @@ txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP] = { .type = NLA_U8 },
 };
 
+static const struct nla_policy
+beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
+		[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
+};
+
 struct csi_null_tone {
 	u8 start;
 	u8 end;
@@ -1535,6 +1540,30 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 	return 0;
 }
 
+static int mt7915_vendor_beacon_ctrl(struct wiphy *wiphy,
+				     struct wireless_dev *wdev,
+				     const void *data,
+				     int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
+	int err;
+	u8 val8;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_BEACON_CTRL_MAX, data, data_len,
+			beacon_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]) {
+		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]);
+		ieee80211_iterate_active_interfaces_atomic(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
+				mt7915_set_beacon_vif, &val8);
+	}
+
+	return 0;
+}
+
 static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
@@ -1662,7 +1691,18 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.doit = mt7915_vendor_txpower_ctrl,
 		.policy = txpower_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
-	}
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BEACON_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7915_vendor_beacon_ctrl,
+		.policy = beacon_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
+	},
 };
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
