@@ -288,9 +288,11 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 	int path_delta = mt76_tx_power_path_delta(n_chains);
 	int pwr_delta = mt7915_eeprom_get_power_delta(dev, sband->band);
 	struct mt76_power_limits limits;
+	struct device_node *np;
 
 	phy->sku_limit_en = true;
 	phy->sku_path_en = true;
+	np = mt76_find_power_limits_node(&dev->mt76);
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
 		u32 target_power = 0;
@@ -314,8 +316,13 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 
 		target_power += path_delta;
 		target_power = DIV_ROUND_UP(target_power, 2);
-		chan->max_power = min_t(int, chan->max_reg_power,
-					target_power);
+
+		/* can NOT find country node in dts */
+		if (!np)
+			chan->max_power = min_t(int, chan->max_reg_power,
+						target_power);
+		else
+			chan->max_power = target_power;
 		chan->orig_mpwr = target_power;
 	}
 }
