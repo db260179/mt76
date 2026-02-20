@@ -306,6 +306,8 @@ struct mt7915_phy {
 	u32 rx_ampdu_ts;
 	u32 ampdu_ref;
 
+	u8 muru_onoff;
+
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
 
