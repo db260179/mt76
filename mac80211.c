@@ -362,11 +362,18 @@ static int
 mt76_init_sband_2g(struct mt76_phy *phy, struct ieee80211_rate *rates,
 		   int n_rates, bool vht)
 {
+	int ret;
 	phy->hw->wiphy->bands[NL80211_BAND_2GHZ] = &phy->sband_2g.sband;
 
-	return mt76_init_sband(phy, &phy->sband_2g, mt76_channels_2ghz,
+	ret= mt76_init_sband(phy, &phy->sband_2g, mt76_channels_2ghz,
 			       ARRAY_SIZE(mt76_channels_2ghz), rates,
 			       n_rates, true, vht);
+	if (ret)
+		return ret;
+
+	phy->sband_2g.sband.vht_cap.vendor_qam256_supported = true;
+
+	return 0;
 }
 
 static int
