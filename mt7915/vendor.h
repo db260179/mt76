@@ -3,7 +3,7 @@
 #define __MT7915_VENDOR_H
 
 #define MTK_NL80211_VENDOR_ID	0x0ce7
-#define EDCCA_THRES_NUM 3
+#define EDCCA_THRES_NUM 4
 
 enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_AMNT_CTRL = 0xae,
@@ -30,6 +30,7 @@ enum mtk_vendor_attr_edcca_ctrl {
         MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL,
         MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL,
         MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE,
+		  MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL,
 
         /* keep last */
         NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL,
@@ -45,6 +46,7 @@ enum mtk_vendor_attr_edcca_dump {
         MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL,
         MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL,
         MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL,
+		  MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL,
 
         /* keep last */
         NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP,

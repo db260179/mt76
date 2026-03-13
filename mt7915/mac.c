@@ -1975,6 +1975,7 @@ void mt7915_mac_work(struct work_struct *work)
 {
 	struct mt7915_phy *phy;
 	struct mt76_phy *mphy;
+	struct mt76_dev *mdev;
 
 	mphy = (struct mt76_phy *)container_of(work, struct mt76_phy,
 					       mac_work.work);

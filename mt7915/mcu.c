@@ -650,7 +650,7 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 		break;
 	case MCU_EXT_EVENT_PS_SYNC:
 		mt7915_mcu_rx_ps_sync(dev, skb);
-#ifdef CONFIG_NL80211_TESTMODE
+		break;
 #if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
 	case MCU_EXT_EVENT_BF_STATUS_READ:
 		mt7915_mcu_txbf_status_read(dev, skb);
@@ -5538,6 +5538,7 @@ int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compens
 		req.setting[0] = value[0];
 		req.setting[1] = value[1];
 		req.setting[2] = value[2];
+		req.setting[3] = value[3];
 	} else {
 		return -EINVAL;
 	}
