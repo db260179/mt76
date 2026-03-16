@@ -763,6 +763,8 @@ static int mt7996_register_phy(struct mt7996_dev *dev, enum mt76_band_id band)
 				     MT_INT_TX_RX_DONE_EXT);
 	}
 
+	dev->mt76.num_phy++;
+
 	return 0;
 
 error:
@@ -1730,6 +1732,8 @@ int mt7996_register_device(struct mt7996_dev *dev)
 		return ret;
 
 	mt7996_init_wiphy(hw, &dev->mt76.mmio.wed);
+	
+	dev->mt76.num_phy = 1;
 
 	ret = mt7996_register_phy(dev, MT_BAND1);
 	if (ret)
@@ -1756,6 +1760,8 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	ieee80211_queue_work(mt76_hw(dev), &dev->init_work);
 
 	dev->recovery.hw_init_done = true;
+	
+	dev->mt76.token_threshold = dev->mt76.token_size / dev->mt76.num_phy;
 
 	ret = mt7996_init_debugfs(dev);
 	if (ret)

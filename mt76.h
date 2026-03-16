@@ -466,6 +466,8 @@ struct mt76_txwi_cache {
 
 	unsigned long jiffies;
 
+	u8 phy_idx;
+
 	union {
 		struct sk_buff *skb;
 		void *ptr;
@@ -1003,6 +1005,7 @@ struct mt76_phy {
 		bool al;
 		u8 pin;
 	} leds;
+	int tokens;
 };
 
 struct mt76_dev {
@@ -1056,6 +1059,8 @@ struct mt76_dev {
 	u16 token_count;
 	u16 token_start;
 	u16 token_size;
+	u16 token_threshold;
+	u8 num_phy;
 
 	spinlock_t rx_token_lock;
 	struct idr rx_token;
@@ -2196,7 +2201,8 @@ static inline bool mt76_queue_is_npu_txfree(struct mt76_queue *q)
 
 struct mt76_txwi_cache *
 mt76_token_release(struct mt76_dev *dev, int token, bool *wake);
-int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi);
+int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
+		       u8 phy_idx);
 void __mt76_set_tx_blocked(struct mt76_dev *dev, bool blocked);
 struct mt76_txwi_cache *mt76_rx_token_release(struct mt76_dev *dev, int token);
 int mt76_rx_token_consume(struct mt76_dev *dev, void *ptr,
