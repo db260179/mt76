@@ -1610,9 +1610,8 @@ mt7915_mcu_get_mmps_mode(enum ieee80211_smps_mode smps)
 	case IEEE80211_SMPS_OFF:
 		return MCU_MMPS_DISABLE;
 	case IEEE80211_SMPS_STATIC:
-		return MCU_MMPS_STATIC;
 	case IEEE80211_SMPS_DYNAMIC:
-		return MCU_MMPS_DYNAMIC;
+		return MCU_MMPS_STATIC;
 	default:
 		return MCU_MMPS_DISABLE;
 	}
