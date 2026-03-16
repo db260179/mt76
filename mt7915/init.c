@@ -1319,6 +1319,8 @@ int mt7915_register_device(struct mt7915_dev *dev)
 
 	dev->dbdc_support = mt7915_band_config(dev);
 
+	dev->mt76.num_phy = 1 + !!dev->dbdc_support;
+
 	phy2 = mt7915_alloc_ext_phy(dev);
 	if (IS_ERR(phy2))
 		return PTR_ERR(phy2);
@@ -1359,6 +1361,7 @@ int mt7915_register_device(struct mt7915_dev *dev)
 	ieee80211_queue_work(mt76_hw(dev), &dev->init_work);
 
 	dev->recovery.hw_init_done = true;
+	dev->mt76.token_threshold = dev->mt76.token_size / dev->mt76.num_phy;
 
 	ret = mt7915_init_debugfs(&dev->phy);
 	if (ret)
