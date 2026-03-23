@@ -91,6 +91,8 @@
 #define MT7915_RTS_LEN_THRES		0x92b
 
 #define IP_DSCP_NUM			64
+#define MT7915_PLE_PURGE_MAX_ITER	64
+#define MT7915_PLE_QUEUE_TIMEOUT	(HZ * 5)
 
 struct mt7915_vif;
 struct mt7915_sta;
@@ -211,6 +213,8 @@ struct mt7915_sta {
 
 	unsigned long changed;
 	struct mt76_connac_sta_key_conf bip;
+
+	struct mt7915_hw_queue_state hwq_state[4];
 
 	struct {
 		u8 flowid_mask;
@@ -378,6 +382,7 @@ struct mt7915_phy {
 	u32 ampdu_ref;
 
 	u8 muru_onoff;
+	u8 stuck_queue_check;
 
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
@@ -470,6 +475,8 @@ struct mt7915_dev {
 		struct mt7915_crash_data *crash_data;
 	} coredump;
 #endif
+
+	struct mutex qctrl_mutex;
 
 	struct list_head sta_rc_list;
 	struct list_head twt_list;
