@@ -86,7 +86,7 @@ edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
        [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC20_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] = { .type = NLA_U8 },
-		 [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL] = { .type = NLA_U8 },
+	   [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE] = { .type = NLA_S8 },
 };
 
@@ -96,7 +96,7 @@ edcca_dump_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP] = {
        [MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL] = { .type = NLA_U8 },
-		 [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL] = { .type = NLA_U8 },
+	   [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL] = { .type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1327,7 +1327,7 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 	} else if (edcca_mode == EDCCA_CTRL_SET_THERS) {
 		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] ||
 		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] ||
-			 !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] ||
+			!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] ||
 		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]) {
 			return -EINVAL;
 		}
@@ -1341,8 +1341,15 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 			nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]);
 		err = mt7915_mcu_set_edcca(phy, edcca_mode, edcca_value,
 					   edcca_compensation);
-		if (err)
+		if (err) {
+			dev_err(phy->dev->mt76.dev,
+				"EDCCA threshold request failed: ret=%d\n", err);
 			return err;
+		}
+		dev_info(phy->dev->mt76.dev,
+			 "EDCCA threshold request accepted by driver: BW20=%d BW40=%d BW80=%d BW160=%d\n",
+			 (s8)edcca_value[0], (s8)edcca_value[1],
+			 (s8)edcca_value[2], (s8)edcca_value[3]);
 	} else {
 		return -EINVAL;
 	}
@@ -1388,7 +1395,7 @@ mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL, value[0]) ||
 	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL, value[1]) ||
-		 nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL, value[2]) ||
+		nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL, value[2]) ||
 	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL, value[3]))
 		return -ENOMEM;
 
