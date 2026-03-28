@@ -376,6 +376,8 @@ struct mt7915_phy {
 	s16 coverage_class;
 	u8 slottime;
 
+	u16 rdd_hw_value;
+	
 	u32 trb_ts;
 
 	u32 rx_ampdu_ts;

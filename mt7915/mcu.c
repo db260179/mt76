@@ -316,6 +316,8 @@ static void
 mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 {
 	struct mt76_phy *mphy = &dev->mt76.phy;
+	struct mt7915_phy *phy;
+	struct cfg80211_chan_def *chandef;
 	struct mt7915_mcu_rdd_report *r;
 	u32 sku;
 
@@ -345,12 +347,24 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 	if (!mphy)
 		return;
 
-	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND)
+	phy = (struct mt7915_phy *)mphy->priv;
+	chandef = &phy->mt76->chandef;
+
+	if (phy->rdd_hw_value == chandef->chan->hw_value) {
+		dev_info(dev->mt76.dev,
+			 "%s: radar detection for channel=%u in progress, ignore r->rdd_idx=%d\n",
+			 __func__, phy->rdd_hw_value, r->rdd_idx);
+		return;
+	}
+
+	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND) {
 		cfg80211_background_radar_event(mphy->hw->wiphy,
 						&dev->rdd2_chandef,
 						GFP_ATOMIC);
-	else
-		ieee80211_radar_detected(mphy->hw, NULL);
+	} else {
+		phy->rdd_hw_value = chandef->chan->hw_value;
+ 		ieee80211_radar_detected(mphy->hw, NULL);
+	}
 	dev->hw_pattern++;
 }
 
