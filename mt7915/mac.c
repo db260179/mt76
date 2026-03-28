@@ -2124,6 +2124,8 @@ int mt7915_dfs_init_radar_detector(struct mt7915_phy *phy)
 	enum mt76_dfs_state dfs_state, prev_state;
 	int err, rdd_idx = mt7915_get_rdd_idx(phy, false);
 
+	phy->rdd_hw_value = 0;
+
 	prev_state = phy->mt76->dfs_state;
 	dfs_state = mt76_phy_dfs_state(phy->mt76);
 
