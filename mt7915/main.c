@@ -523,7 +523,7 @@ static int mt7915_config(struct ieee80211_hw *hw, int radio_idx,
 #endif
 		ret = mt7915_mcu_set_edcca(phy, EDCCA_CTRL_SET_EN, NULL, 0);
 			if (ret)
-				return ret;
+				return ret;	
 		ret = mt76_update_channel(phy->mt76);
 		if (ret)
 			return ret;
@@ -878,7 +878,7 @@ int mt7915_mac_sta_add(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	mt7915_mac_wtbl_update(dev, idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
 	mt7915_mcu_add_sta(dev, vif, sta, CONN_STATE_DISCONNECT, true);
-
+	
 	if (mt7915_is_atf_default_on(wiphy, dev)) {
 		msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO] = 2;
 		msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI] = 2;
@@ -963,7 +963,7 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 
 		addr = mt7915_mac_wtbl_lmac_addr(dev, msta->wcid.idx, 30);
 		mt76_rmw_field(dev, addr, GENMASK(7, 0), 0xa0);
-
+		
 #ifdef CONFIG_MTK_VENDOR
 	mt7915_vendor_amnt_sta_remove(mvif->phy, sta);
 #endif
@@ -971,7 +971,7 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 		ret = mt7915_mcu_add_rate_ctrl(dev, vif, sta, &msta->wcid, false);
 		if (ret)
 			return ret;
-
+			
 #ifdef CONFIG_MTK_VENDOR
 	if (phy->muru_onoff & MUMIMO_DL_CERT)
 		mt7915_mcu_set_mimo(phy, 0);
@@ -2046,7 +2046,6 @@ const struct ieee80211_ops mt7915_ops = {
 	.sw_scan_complete = mt76_sw_scan_complete,
 	.release_buffered_frames = mt76_release_buffered_frames,
 	.get_txpower = mt76_get_txpower,
-	.set_tim = mt76_set_tim,
 	.set_sar_specs = mt7915_set_sar_specs,
 	.channel_switch_beacon = mt7915_channel_switch_beacon,
 	.post_channel_switch = mt7915_post_channel_switch,
