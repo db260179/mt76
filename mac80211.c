@@ -458,7 +458,8 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
 			WIPHY_FLAG_AP_UAPSD;
 
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
-	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_AIRTIME_FAIRNESS);
+	if (dev->expose_airtime_fairness)
+		wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_AIRTIME_FAIRNESS);
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_AQL);
 
 	if (!wiphy->max_remain_on_channel_duration)
@@ -695,6 +696,7 @@ mt76_alloc_device(struct device *pdev, unsigned int size,
 	dev->dev = pdev;
 	dev->drv = drv_ops;
 	dev->dma_dev = pdev;
+	dev->expose_airtime_fairness = true;
 
 	phy = &dev->phy;
 	phy->dev = dev;
