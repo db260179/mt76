@@ -17,6 +17,11 @@ static bool wed_enable;
 module_param(wed_enable, bool, 0644);
 MODULE_PARM_DESC(wed_enable, "Enable Wireless Ethernet Dispatch support");
 
+static bool expose_airtime_fairness = true;
+module_param(expose_airtime_fairness, bool, 0644);
+MODULE_PARM_DESC(expose_airtime_fairness,
+		 "Expose NL80211_EXT_FEATURE_AIRTIME_FAIRNESS");
+
 static const u32 mt7915_reg[] = {
 	[INT_SOURCE_CSR]		= 0xd7010,
 	[INT_MASK_CSR]			= 0xd7014,
@@ -961,6 +966,7 @@ struct mt7915_dev *mt7915_mmio_probe(struct device *pdev,
 		return ERR_PTR(-ENOMEM);
 
 	dev = container_of(mdev, struct mt7915_dev, mt76);
+	dev->mt76.expose_airtime_fairness = expose_airtime_fairness;
 
 	ret = mt7915_mmio_init(mdev, mem_base, device_id);
 	if (ret)

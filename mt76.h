@@ -1065,6 +1065,7 @@ struct mt76_dev {
 	u16 token_size;
 	u16 token_threshold;
 	u8 num_phy;
+	bool expose_airtime_fairness;
 
 	spinlock_t rx_token_lock;
 	struct idr rx_token;
