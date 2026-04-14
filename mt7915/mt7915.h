@@ -373,7 +373,7 @@ struct mt7915_phy {
 	u8 slottime;
 
 	u16 rdd_hw_value;
-	
+
 	u32 trb_ts;
 
 	u32 rx_ampdu_ts;
@@ -947,6 +947,7 @@ int mt7915_mcu_ipi_hist_scan(struct mt7915_phy *phy, void *data, u8 mode, bool w
 int mt7915_mcu_set_scs_en(struct mt7915_phy *phy, u8 enable);
 void mt7915_mcu_scs_sta_poll(struct work_struct *work);
 int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action);
+int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold);
 
 #ifdef MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);
