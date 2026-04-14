@@ -5729,6 +5729,28 @@ int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action)
 				 sizeof(req), true);
 }
 
+int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold)
+{
+	struct {
+		__le16 per_sta_threshold;
+		__le16 flush_threshold;
+		u8 enable;
+		u8 rsv[3];
+	} req = {
+		.enable = true,
+		.per_sta_threshold = cpu_to_le16(threshold),
+	};
+	u16 thresh = dev->mt76.token_size;
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+		thresh += dev->mt76.mmio.wed.wlan.nbuf;
+
+	req.flush_threshold = cpu_to_le16(thresh * 4 / 5);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(PS_CTRL), &req,
+				 sizeof(req), true);
+}
+
 int mt7915_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag)
 {
 	struct {
