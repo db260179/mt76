@@ -3891,7 +3891,6 @@ static int mt7915_fw_wm_info_read(struct seq_file *s, void *data)
 static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
-	struct mt76_dev *mdev = &dev->mt76;
 	u8 free_block_num = 0;
 #ifdef CONFIG_NL80211_TESTMODE
 	const char *mtd_name = mdev->test_mtd.name;
@@ -3983,6 +3982,20 @@ mt7915_thermal_recal_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_thermal_recal, NULL,
 			 mt7915_thermal_recal_set, "%llu\n");
 
+static int
+mt7915_ps_ctrl_set(void *data, u64 val)
+{
+	struct mt7915_dev *dev = data;
+
+	if (val > 0xffff)
+		return -EINVAL;
+
+	return mt7915_mcu_set_ps_ctrl(dev, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_ps_ctrl, NULL,
+			 mt7915_ps_ctrl_set, "%llu\n");
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -4052,6 +4065,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "fw_wm_info", dir,
 				    mt7915_fw_wm_info_read);
 
+	debugfs_create_file("ps_ctrl", 0200, dir, dev, &fops_ps_ctrl);
 	debugfs_create_file("prot_thr", 0200, dir, phy, &fops_muru_set_prot_thr);
 	debugfs_create_file("red_en", 0600, dir, dev,
 			    &fops_red_en);

@@ -2883,8 +2883,10 @@ int mt76_connac_mcu_bss_basic_tlv(struct sk_buff *skb,
 		bss->dtim_period = vif->bss_conf.dtim_period;
 		bss->phy_mode = mt76_connac_get_phy_mode(phy, vif,
 							 chandef->chan->band, NULL);
+#ifdef CONFIG_NL80211_TESTMODE
 	} else if (td->bf_en) {
 		memcpy(bss->bssid, vif->addr, ETH_ALEN);
+#endif
 	} else {
 		memcpy(bss->bssid, phy->macaddr, ETH_ALEN);
 	}
@@ -3265,7 +3267,9 @@ int mt76_connac2_mcu_fill_message(struct mt76_dev *dev, struct sk_buff *skb,
 		mcu_txd->set_query = MCU_Q_NA;
 	}
 
-	if (cmd & __MCU_CMD_FIELD_WA)
+	if (cmd == MCU_EXT_CMD(PS_CTRL))
+		mcu_txd->s2d_index = MCU_S2D_H2CN;
+	else if (cmd & __MCU_CMD_FIELD_WA)
 		mcu_txd->s2d_index = MCU_S2D_H2C;
 	else
 		mcu_txd->s2d_index = MCU_S2D_H2N;
@@ -3279,5 +3283,7 @@ exit:
 EXPORT_SYMBOL_GPL(mt76_connac2_mcu_fill_message);
 
 MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+MODULE_DESCRIPTION("MediaTek MT76x connac layer helpers");
+MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("MediaTek MT76x connac layer helpers");
 MODULE_LICENSE("Dual BSD/GPL");

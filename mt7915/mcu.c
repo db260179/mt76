@@ -425,31 +425,6 @@ mt7915_mcu_rx_bcc_notify(struct mt7915_dev *dev, struct sk_buff *skb)
 			mt7915_mcu_cca_finish, mphy->hw);
 }
 
-static void mt7915_mcu_rx_ps_sync(struct mt7915_dev *dev, struct sk_buff *skb)
-{
-	struct mt7915_mcu_ps_notify *p;
-	struct ieee80211_sta *sta;
-	struct mt76_wcid *wcid;
-	u16 wcid_idx;
-
-	p = (struct mt7915_mcu_ps_notify *)skb->data;
-	wcid_idx = p->wtbl_lower | (p->wtbl_higher) << 8;
-
-	rcu_read_lock();
-	wcid = mt76_wcid_ptr(dev, wcid_idx);
-	if (!wcid)
-		goto out;
-
-	sta = wcid_to_sta(wcid);
-	if (!sta)
-		goto out;
-
-	ieee80211_sta_ps_transition_ni(sta, !!p->ps_bit);
-
-out:
-	rcu_read_unlock();
-}
-
 void mt7915_mcu_wmm_pbc_work(struct work_struct *work)
 {
 #define WMM_PBC_QUEUE_NUM		5
@@ -483,7 +458,7 @@ void mt7915_mcu_wmm_pbc_work(struct work_struct *work)
 	int i;
 
 #define pbc_acq_up_bound_config(_band, _ac, _bound)									\
-	req.bound[_band * WMM_PBC_QMCU_EXT_EVENT_BSS_ACQ_PKT_CNTUEUE_NUM + mt76_connac_lmac_mapping(_ac)].up = dev->wmm_pbc_enable			\
+	req.bound[_band * WMM_PBC_QUEUE_NUM + mt76_connac_lmac_mapping(_ac)].up = dev->wmm_pbc_enable			\
 	                                                                        ? cpu_to_le16(_bound)			\
 	                                                                        : cpu_to_le16(WMM_PBC_BOUND_DEFAULT)
 	pbc_acq_up_bound_config(MT_BAND0, IEEE80211_AC_VO, WMM_PBC_UP_BOUND_BAND0_VO);
@@ -695,10 +670,6 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_BCC_NOTIFY:
 		mt7915_mcu_rx_bcc_notify(dev, skb);
 		break;
-	case MCU_EXT_EVENT_PS_SYNC:
-		mt7915_mcu_rx_ps_sync(dev, skb);
-		break;
-#ifdef CONFIG_NL80211_TESTMODE
 #if defined CONFIG_NL80211_TESTMODE || defined MTK_DEBUG
 	case MCU_EXT_EVENT_BF_STATUS_READ:
 		mt7915_mcu_txbf_status_read(dev, skb);
@@ -1004,6 +975,7 @@ int mt7915_mcu_add_bss_info(struct mt7915_phy *phy,
 		mt76_connac_mcu_bss_omac_tlv(skb, vif);
 
 	if (vif->type == NL80211_IFTYPE_MONITOR) {
+#ifdef CONFIG_NL80211_TESTMODE
 		struct mt76_testmode_data *td = &phy->mt76->test;
 		struct mt76_wcid *wcid;
 
@@ -1014,11 +986,14 @@ int mt7915_mcu_add_bss_info(struct mt7915_phy *phy,
 
 		mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
 					      wcid->idx, enable);
+#endif
 		goto out;
 	}
 
+#ifdef CONFIG_NL80211_TESTMODE
 	mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
 				      mvif->sta.wcid.idx, enable);
+#endif
 
 	if (enable) {
 		mt7915_mcu_bss_rfch_tlv(skb, vif, phy);
@@ -5781,6 +5756,28 @@ int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action)
 	};
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(THERMAL_DEBUG), &req,
+				 sizeof(req), true);
+}
+
+int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold)
+{
+	struct {
+		__le16 per_sta_threshold;
+		__le16 flush_threshold;
+		u8 enable;
+		u8 rsv[3];
+	} req = {
+		.enable = true,
+		.per_sta_threshold = cpu_to_le16(threshold),
+	};
+	u16 thresh = dev->mt76.token_size;
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+		thresh += dev->mt76.mmio.wed.wlan.nbuf;
+
+	req.flush_threshold = cpu_to_le16(thresh * 4 / 5);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(PS_CTRL), &req,
 				 sizeof(req), true);
 }
 
