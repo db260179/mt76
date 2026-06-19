@@ -5539,6 +5539,7 @@ int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compens
 		req.setting[0] = value[0];
 		req.setting[1] = value[1];
 		req.setting[2] = value[2];
+		req.setting[3] = value[3];
 	} else {
 		return -EINVAL;
 	}

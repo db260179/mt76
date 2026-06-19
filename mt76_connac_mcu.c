@@ -403,9 +403,8 @@ void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
 	switch (vif->type) {
 	case NL80211_IFTYPE_MESH_POINT:
 	case NL80211_IFTYPE_AP:
-		if (vif->p2p && !is_connac2(dev))
 	case NL80211_IFTYPE_MONITOR:
-		if (vif->p2p && !is_mt7921(dev))
+		if (vif->p2p && !is_connac2(dev))
 			conn_type = CONNECTION_P2P_GC;
 		else
 			conn_type = CONNECTION_INFRA_STA;
