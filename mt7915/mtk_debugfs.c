@@ -3891,7 +3891,6 @@ static int mt7915_fw_wm_info_read(struct seq_file *s, void *data)
 static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
-	struct mt76_dev *mdev = &dev->mt76;
 	u8 free_block_num = 0;
 #ifdef CONFIG_NL80211_TESTMODE
 	const char *mtd_name = mdev->test_mtd.name;
