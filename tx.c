@@ -337,10 +337,6 @@ __mt76_tx_queue_skb(struct mt76_phy *phy, int qid, struct sk_buff *skb,
 	if (idx < 0 || !sta)
 		return idx;
 
-	wcid = (struct mt76_wcid *)sta->drv_priv;
-	if (!wcid->sta)
-		return idx;
-
 	q->entry[idx].wcid = wcid->idx;
 
 	if (!non_aql)
@@ -381,7 +377,7 @@ mt76_tx(struct mt76_phy *phy, struct ieee80211_sta *sta,
 		head = &wcid->tx_offchannel;
 	else
 		head = &wcid->tx_pending;
-		
+
 	if (!wcid->tx_pending.prev || !wcid->tx_pending.next) {
 		dev_warn(phy->dev->dev, "Un-initialized STA %pM wcid %d in mt76_tx\n",
 			 sta->addr, wcid->idx);
