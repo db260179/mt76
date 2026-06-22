@@ -974,7 +974,11 @@ int mt7915_mcu_add_bss_info(struct mt7915_phy *phy,
 	if (enable)
 		mt76_connac_mcu_bss_omac_tlv(skb, vif);
 
+	mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
+				mvif->sta.wcid.idx, enable);
+
 	if (vif->type == NL80211_IFTYPE_MONITOR) {
+ #ifdef CONFIG_NL80211_TESTMODE
 		struct mt76_testmode_data *td = &phy->mt76->test;
 		struct mt76_wcid *wcid;
 
@@ -985,11 +989,9 @@ int mt7915_mcu_add_bss_info(struct mt7915_phy *phy,
 
 		mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
 					      wcid->idx, enable);
+#endif
 		goto out;
 	}
-
-	mt76_connac_mcu_bss_basic_tlv(skb, vif, NULL, phy->mt76,
-				      mvif->sta.wcid.idx, enable);
 
 	if (enable) {
 		mt7915_mcu_bss_rfch_tlv(skb, vif, phy);
