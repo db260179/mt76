@@ -651,4 +651,29 @@ void mt7915_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 			 bool pci, int *irq);
 
+enum {
+	EDCCA_CTRL_SET_EN = 0,
+	EDCCA_CTRL_SET_THERS,
+	EDCCA_CTRL_GET_EN,
+	EDCCA_CTRL_GET_THERS,
+	EDCCA_CTRL_NUM,
+};
+
+enum {
+	EDCCA_MODE_FORCE_DISABLE,
+	EDCCA_MODE_AUTO,
+};
+
+struct mt7915_mcu_edcca_info {
+	u8 cmd_idx;
+	u8 band_idx;
+	u8 info[4];
+	u8 fginit;
+	u8 rsv;
+};
+
+void mt7915_register_vendor(struct mt7915_phy *phy);
+int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compensation);
+int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value);
+
 #endif

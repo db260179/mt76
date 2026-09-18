@@ -1254,6 +1254,8 @@ int mt7915_register_device(struct mt7915_dev *dev)
 	dev->mt76.test_ops = &mt7915_testmode_ops;
 #endif
 
+	mt7915_register_vendor(&dev->phy);
+
 	ret = mt76_register_device(&dev->mt76, true, mt76_rates,
 				   ARRAY_SIZE(mt76_rates));
 	if (ret)
@@ -1264,6 +1266,7 @@ int mt7915_register_device(struct mt7915_dev *dev)
 		goto unreg_dev;
 
 	if (phy2) {
+		mt7915_register_vendor(phy2);
 		ret = mt7915_register_ext_phy(dev, phy2);
 		if (ret)
 			goto unreg_thermal;
