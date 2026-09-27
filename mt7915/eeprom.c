@@ -608,6 +608,21 @@ mt7915_eeprom_has_background_radar(struct mt7915_dev *dev)
 	return false;
 }
 
+bool mt7915_mt7981_dedicated_cac_supported(struct mt7915_phy *phy)
+{
+	struct mt7915_dev *dev = phy->dev;
+	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 conf;
+
+	if (!is_mt7981(&dev->mt76) || !phy->mt76->cap.has_5ghz ||
+	    !eeprom)
+		return false;
+
+	conf = eeprom[MT_EE_WIFI_CONF + phy->mt76->band_idx];
+	/* MT7981 needs a third RX path for the dedicated radar receiver. */
+	return u8_get_bits(conf, MT_EE_WIFI_CONF0_RX_PATH) >= 3;
+}
+
 const u8 mt7915_sku_group_len[] = {
 	[SKU_CCK] = 4,
 	[SKU_OFDM] = 8,

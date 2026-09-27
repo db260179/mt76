@@ -201,6 +201,8 @@ struct mt7915_phy {
 	struct mt76_phy *mt76;
 	struct mt7915_dev *dev;
 
+	u8 ap_count;
+
 	struct ieee80211_sband_iftype_data iftype[NUM_NL80211_BANDS][NUM_NL80211_IFTYPES];
 
 	struct ieee80211_vif *monitor_vif;
@@ -263,6 +265,11 @@ struct mt7915_dev {
 	/* monitor rx chain configured channel */
 	struct cfg80211_chan_def rdd2_chandef;
 	struct mt7915_phy *rdd2_phy;
+
+	/* MT7986 adjacent 80 MHz CAC using the main RDD */
+	struct cfg80211_chan_def adjacent_cac_chandef;
+	struct mt7915_phy *adjacent_cac_phy;
+	bool adjacent_radar_reported;
 
 	u16 chainmask;
 	u16 chainshift;
@@ -514,6 +521,7 @@ int mt7915_mcu_add_smps(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 			struct ieee80211_sta *sta);
 int mt7915_set_channel(struct mt76_phy *mphy);
 int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd);
+int mt7915_mcu_set_adjacent_su(struct mt7915_phy *phy, bool enable);
 int mt7915_mcu_set_tx(struct mt7915_dev *dev, struct ieee80211_vif *vif);
 int mt7915_mcu_update_edca(struct mt7915_dev *dev, void *req);
 int mt7915_mcu_set_fixed_rate_ctrl(struct mt7915_dev *dev,
@@ -636,6 +644,10 @@ bool mt7915_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7915_stats_work(struct work_struct *work);
 int mt76_dfs_start_rdd(struct mt7915_dev *dev, bool force);
 int mt7915_dfs_init_radar_detector(struct mt7915_phy *phy);
+int mt7915_dfs_start_adjacent_cac(struct mt7915_phy *phy);
+int mt7915_dfs_stop_adjacent_cac(struct mt7915_phy *phy);
+bool mt7915_mt7981_dedicated_cac_supported(struct mt7915_phy *phy);
+
 void mt7915_set_stream_he_caps(struct mt7915_phy *phy);
 void mt7915_set_stream_vht_txbf_caps(struct mt7915_phy *phy);
 void mt7915_update_channel(struct mt76_phy *mphy);

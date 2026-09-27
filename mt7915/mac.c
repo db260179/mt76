@@ -2131,6 +2131,38 @@ mt7915_dfs_init_radar_specs(struct mt7915_phy *phy)
 	return mt7915_mcu_set_pulse_th(dev, &radar_specs->pulse_th);
 }
 
+int mt7915_dfs_start_adjacent_cac(struct mt7915_phy *phy)
+{
+	int err, rdd_idx;
+
+	err = mt7915_dfs_init_radar_specs(phy);
+	if (err)
+		return err;
+
+	rdd_idx = mt7915_get_rdd_idx(phy, false);
+	if (rdd_idx < 0)
+		return -EINVAL;
+
+	return mt7915_dfs_start_rdd(phy->dev, rdd_idx);
+}
+
+int mt7915_dfs_stop_adjacent_cac(struct mt7915_phy *phy)
+{
+	struct mt7915_dev *dev = phy->dev;
+	int rdd_idx = mt7915_get_rdd_idx(phy, false);
+	int err, stop_err;
+
+	if (rdd_idx < 0)
+		return -EINVAL;
+
+	err = mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_NORMAL_START,
+				       rdd_idx, 0, 0);
+	stop_err = mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_STOP,
+					    rdd_idx, 0, 0);
+
+	return err ? err : stop_err;
+}
+
 int mt7915_dfs_init_radar_detector(struct mt7915_phy *phy)
 {
 	struct mt7915_dev *dev = phy->dev;

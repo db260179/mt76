@@ -330,11 +330,75 @@ static void mt7915_remove_interface(struct ieee80211_hw *hw,
 	mt76_wcid_cleanup(&dev->mt76, &msta->wcid);
 }
 
+static int mt7915_stop_adjacent_cac(struct mt7915_phy *phy, bool restore)
+{
+	struct mt7915_dev *dev = phy->dev;
+	int err, ret;
+
+	if (READ_ONCE(dev->adjacent_cac_phy) != phy)
+		return 0;
+
+	WRITE_ONCE(dev->adjacent_cac_phy, NULL);
+	WRITE_ONCE(dev->adjacent_radar_reported, false);
+	err = mt7915_dfs_stop_adjacent_cac(phy);
+
+	if (restore) {
+		ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(CHANNEL_SWITCH));
+		if (!err)
+			err = ret;
+	}
+
+	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(SET_RX_PATH));
+	if (!err)
+		err = ret;
+
+	ret = mt7915_mcu_set_adjacent_su(phy, false);
+	if (!err)
+		err = ret;
+
+	return err;
+}
+
+static bool
+mt7915_adjacent_cac_valid(struct mt7915_phy *phy,
+			  struct cfg80211_chan_def *target)
+{
+	struct cfg80211_chan_def *ap = &phy->mt76->chandef;
+	int dfs;
+
+	if (!target || !cfg80211_chandef_valid(target) ||
+	    !cfg80211_chandef_valid(ap) ||
+	    !test_bit(MT76_STATE_RUNNING, &phy->mt76->state) ||
+	    !phy->ap_count ||
+	    phy->mt76->offchannel ||
+	    phy->mt76->dfs_state != MT_DFS_STATE_DISABLED ||
+	    ap->width != NL80211_CHAN_WIDTH_80 ||
+	    target->width != NL80211_CHAN_WIDTH_80 ||
+	    ap->center_freq1 != 5210 ||
+	    target->center_freq1 != 5290 ||
+	    ap->chan->band != NL80211_BAND_5GHZ ||
+	    target->chan->band != NL80211_BAND_5GHZ)
+		return false;
+
+	dfs = cfg80211_chandef_dfs_required(phy->mt76->hw->wiphy, target,
+					 NL80211_IFTYPE_AP);
+	return dfs > 0;
+}
+
 int mt7915_set_channel(struct mt76_phy *mphy)
 {
 	struct mt7915_phy *phy = mphy->priv;
 	struct mt7915_dev *dev = phy->dev;
 	int ret;
+
+	if (READ_ONCE(dev->adjacent_cac_phy) == phy) {
+		ret = mt7915_stop_adjacent_cac(phy, false);
+		cfg80211_background_cac_abort(mphy->hw->wiphy);
+		if (ret)
+			dev_warn(dev->mt76.dev,
+				 "failed to stop adjacent CAC before channel change: %d\n",
+				 ret);
+	}
 
 	if (dev->cal) {
 		ret = mt7915_mcu_apply_tx_dpd(phy);
@@ -720,6 +784,8 @@ mt7915_start_ap(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	if (err)
 		goto out;
 	err = mt7915_mcu_add_sta(dev, vif, NULL, CONN_STATE_PORT_SECURE, false);
+	if (!err)
+		phy->ap_count++;
 out:
 	mutex_unlock(&dev->mt76.mutex);
 
@@ -730,9 +796,16 @@ static void
 mt7915_stop_ap(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	       struct ieee80211_bss_conf *link_conf)
 {
+	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct mt7915_dev *dev = mt7915_hw_dev(hw);
 
 	mutex_lock(&dev->mt76.mutex);
+	if (phy->ap_count)
+		phy->ap_count--;
+	if (!phy->ap_count && READ_ONCE(dev->adjacent_cac_phy) == phy) {
+		mt7915_stop_adjacent_cac(phy, true);
+		cfg80211_background_cac_abort(hw->wiphy);
+	}
 	mt7915_mcu_add_sta(dev, vif, NULL, CONN_STATE_DISCONNECT, false);
 	mutex_unlock(&dev->mt76.mutex);
 }
@@ -1758,6 +1831,49 @@ mt7915_set_radar_background(struct ieee80211_hw *hw,
 	struct mt7915_dev *dev = phy->dev;
 	int ret = -EINVAL;
 	bool running;
+
+	if (is_mt7986(&dev->mt76)) {
+		mutex_lock(&dev->mt76.mutex);
+
+		if (!chandef) {
+			ret = dev->adjacent_cac_phy ?
+				mt7915_stop_adjacent_cac(dev->adjacent_cac_phy, true) : 0;
+			goto adjacent_out;
+		}
+
+		if (dev->adjacent_cac_phy) {
+			ret = -EBUSY;
+			goto adjacent_out;
+		}
+
+		if (dev->mt76.region == NL80211_DFS_UNSET ||
+		    !mt7915_adjacent_cac_valid(phy, chandef)) {
+			ret = -EOPNOTSUPP;
+			goto adjacent_out;
+		}
+
+		ret = mt7915_mcu_set_adjacent_su(phy, true);
+		if (ret)
+			goto adjacent_out;
+
+		dev->adjacent_cac_chandef = *chandef;
+		WRITE_ONCE(dev->adjacent_radar_reported, false);
+		WRITE_ONCE(dev->adjacent_cac_phy, phy);
+		ret = mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_NORMAL_START,
+					       mt7915_get_rdd_idx(phy, false), 0, 0);
+		if (!ret)
+			ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(CHANNEL_SWITCH));
+		if (!ret)
+			ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(SET_RX_PATH));
+		if (!ret)
+			ret = mt7915_dfs_start_adjacent_cac(phy);
+		if (ret)
+			mt7915_stop_adjacent_cac(phy, true);
+
+adjacent_out:
+		mutex_unlock(&dev->mt76.mutex);
+		return ret;
+	}
 
 	mutex_lock(&dev->mt76.mutex);
 

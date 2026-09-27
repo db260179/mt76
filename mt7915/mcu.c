@@ -308,9 +308,24 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 {
 	struct mt76_phy *mphy = &dev->mt76.phy;
 	struct mt7915_mcu_rdd_report *r;
+	struct mt7915_phy *adjacent;
 	u32 sku;
 
 	r = (struct mt7915_mcu_rdd_report *)skb->data;
+
+	adjacent = READ_ONCE(dev->adjacent_cac_phy);
+	if (adjacent &&
+	    r->rdd_idx == mt7915_get_rdd_idx(adjacent, false)) {
+		if (READ_ONCE(dev->adjacent_radar_reported))
+			return;
+
+		WRITE_ONCE(dev->adjacent_radar_reported, true);
+		cfg80211_background_radar_event(adjacent->mt76->hw->wiphy,
+						&dev->adjacent_cac_chandef,
+						GFP_ATOMIC);
+		dev->hw_pattern++;
+		return;
+	}
 
 	switch (r->rdd_idx) {
 	case MT_RDD_IDX_BAND0:
@@ -336,12 +351,18 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 	if (!mphy)
 		return;
 
-	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND)
+	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND) {
 		cfg80211_background_radar_event(mphy->hw->wiphy,
 						&dev->rdd2_chandef,
 						GFP_ATOMIC);
-	else
+	} else {
+		/* A late event from the adjacent CAC is not radar on the lower AP. */
+		if ((is_mt7986(&dev->mt76)) &&
+		    mphy->dfs_state == MT_DFS_STATE_DISABLED)
+			return;
+
 		ieee80211_radar_detected(mphy->hw, NULL);
+	}
 	dev->hw_pattern++;
 }
 
@@ -2296,6 +2317,21 @@ int mt7915_mcu_muru_debug_get(struct mt7915_phy *phy)
 	return 0;
 }
 
+int mt7915_mcu_set_adjacent_su(struct mt7915_phy *phy, bool enable)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		__le32 cmd;
+		u8 enable_su;
+	} __packed req = {
+		.cmd = cpu_to_le32(16 /* MURU_SET_SUTX */),
+		.enable_su = enable,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MURU_CTRL), &req,
+				 sizeof(req), false);
+}
+
 static int mt7915_mcu_set_mwds(struct mt7915_dev *dev, bool enabled)
 {
 	struct {
@@ -2753,7 +2789,8 @@ mt7915_mcu_background_chain_ctrl(struct mt7915_phy *phy,
 		req.central_chan = ieee80211_frequency_to_channel(freq);
 		req.bw = mt76_connac_chan_bw(&mphy->chandef);
 		req.tx_stream = hweight8(mphy->antenna_mask);
-		req.rx_stream = mphy->antenna_mask;
+		req.rx_stream = mt7915_mt7981_dedicated_cac_supported(phy) ?
+				GENMASK(2, 0) : mphy->antenna_mask;
 		break;
 	default:
 		return -EINVAL;
@@ -2850,6 +2887,11 @@ int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd)
 	}
 #endif
 
+	/* Keep two data streams while making RX3 available for radar. */
+	if (mt7915_mt7981_dedicated_cac_supported(phy) &&
+	    !mt76_testmode_enabled(phy->mt76))
+		req.rx_path = GENMASK(2, 0);
+
 	if (mt76_connac_spe_idx(phy->mt76->antenna_mask))
 		req.tx_path_num = fls(phy->mt76->antenna_mask);
 
@@ -2871,6 +2913,19 @@ int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd)
 		int freq2 = chandef->center_freq2;
 
 		req.center_ch2 = ieee80211_frequency_to_channel(freq2);
+	}
+
+	/*
+	 * Keep the AP at 80 MHz while widening the receiver for the
+	 * adjacent DFS 80 MHz CAC.
+	 */
+	if ((cmd == MCU_EXT_CMD(CHANNEL_SWITCH) ||
+	     cmd == MCU_EXT_CMD(SET_RX_PATH)) &&
+	    READ_ONCE(dev->adjacent_cac_phy) == phy) {
+		req.center_ch = 50;
+		req.bw = CMD_CBW_160MHZ;
+		req.ap_bw = CMD_CBW_160MHZ;
+		req.ap_center_ch = 42;
 	}
 
 	return mt76_mcu_send_msg(&dev->mt76, cmd, &req, sizeof(req), true);
