@@ -23,7 +23,7 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
 	int err;
 	u8 edcca_mode;
-	s8 edcca_compensation;
+	s8 edcca_compensation = 0;
 	u8 edcca_value[EDCCA_THRES_NUM] = {0};
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
@@ -47,10 +47,12 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 		if (err)
 			return err;
 	} else if (edcca_mode == EDCCA_CTRL_SET_THERS) {
+		/* The connac2 firmware has thresholds for BW20/40/80 only.
+		 * hostapd also sends SEC160, which is accepted and ignored.
+		 */
 		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] ||
 		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] ||
-		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] ||
-		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]) {
+		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL]) {
 			return -EINVAL;
 		}
 		edcca_value[0] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
@@ -105,10 +107,13 @@ mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	if (err)
 		return err;
 
+	/* No BW160 threshold in the firmware: report 0, which hostapd
+	 * expects as SEC160.
+	 */
 	if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL, value[0]) ||
 	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL, value[1]) ||
 	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL, value[2]) ||
-	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL, value[3]))
+	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL, 0))
 		return -ENOMEM;
 
 	return len;
