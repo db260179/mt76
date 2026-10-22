@@ -1269,6 +1269,90 @@ mt7915_txpower_path_show(struct seq_file *file, void *data)
 DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_path);
 
 static int
+mt7915_txpower_info_show(struct seq_file *file, void *data)
+{
+	struct mt7915_phy *phy = file->private;
+	struct mt76_dev *mdev = &phy->dev->mt76;
+	struct {
+		u8 category;
+		u8 rsv1;
+
+		/* basic info */
+		u8 band_idx;
+		u8 band;
+
+		/* board type info */
+		bool is_epa;
+		bool is_elna;
+
+		/* power percentage info */
+		bool percentage_ctrl_enable;
+		s8 power_drop_level;
+
+		/* front-end loss info */
+		s8 front_end_loss_tx[4];
+		s8 front_end_loss_rx[4];
+
+		/* thermal info */
+		bool thermal_compensate_enable;
+		s8 thermal_compensate_value;
+		u8 rsv2;
+
+		/* TX power max/min limit info */
+		s8 max_power_bound;
+		s8 min_power_bound;
+
+		/* power limit info */
+		bool sku_enable;
+		bool bf_backoff_enable;
+
+		/* MU TX power info */
+		bool mu_tx_power_manual_enable;
+		s8 mu_tx_power_auto;
+		s8 mu_tx_power_manual;
+		u8 rsv3;
+	} __packed info = {};
+	int ret;
+
+	ret = mt7915_mcu_get_txpower_sku(phy, (s8 *)&info, sizeof(info),
+					 TX_POWER_INFO_BASIC);
+	if (ret)
+		return ret;
+
+	seq_printf(file, "Band Index: %d, Channel Band: %d\n",
+		   info.band_idx, info.band);
+	seq_printf(file, "PA Type: %s\n", info.is_epa ? "ePA" : "iPA");
+	seq_printf(file, "LNA Type: %s\n", info.is_elna ? "eLNA" : "iLNA");
+	seq_printf(file, "SKU: %s\n", info.sku_enable ? "enable" : "disable");
+	seq_printf(file, "Percentage Control: %s\n",
+		   info.percentage_ctrl_enable ? "enable" : "disable");
+	seq_printf(file, "Power Drop: %d [0.5 dBm]\n", info.power_drop_level);
+	seq_printf(file, "BF Backoff: %s\n",
+		   info.bf_backoff_enable ? "enable" : "disable");
+	seq_printf(file, "TX Front-end Loss: %d, %d, %d, %d [0.5 dBm]\n",
+		   info.front_end_loss_tx[0], info.front_end_loss_tx[1],
+		   info.front_end_loss_tx[2], info.front_end_loss_tx[3]);
+	seq_printf(file, "RX Front-end Loss: %d, %d, %d, %d [0.5 dBm]\n",
+		   info.front_end_loss_rx[0], info.front_end_loss_rx[1],
+		   info.front_end_loss_rx[2], info.front_end_loss_rx[3]);
+	seq_printf(file, "TX Power Bound (max / min): %d / %d [0.5 dBm]\n",
+		   info.max_power_bound, info.min_power_bound);
+	seq_printf(file, "MU TX Power Mode: %s\n",
+		   info.mu_tx_power_manual_enable ? "manual" : "auto");
+	seq_printf(file, "MU TX Power (auto / manual): %d / %d [0.5 dBm]\n",
+		   info.mu_tx_power_auto, info.mu_tx_power_manual);
+	seq_printf(file, "Thermal Compensation: %s, value %d\n",
+		   info.thermal_compensate_enable ? "enable" : "disable",
+		   info.thermal_compensate_value);
+	seq_printf(file, "DT power-limits: %s\n",
+		   mt76_find_power_limits_node(mdev) ? "present" : "absent");
+
+	return 0;
+}
+
+DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_info);
+
+static int
 mt7915_twt_stats(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
@@ -1357,6 +1441,8 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 			    &mt7915_txpower_fops);
 	debugfs_create_file("txpower_path", 0400, dir, phy,
 			    &mt7915_txpower_path_fops);
+	debugfs_create_file("txpower_info", 0400, dir, phy,
+			    &mt7915_txpower_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
 				    mt7915_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
