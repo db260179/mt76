@@ -680,7 +680,7 @@ enum {
 struct mt7915_mcu_edcca_info {
 	u8 cmd_idx;
 	u8 band_idx;
-	u8 info[4];
+	u8 info[3];
 	u8 fginit;
 	u8 rsv;
 };

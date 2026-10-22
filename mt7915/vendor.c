@@ -58,7 +58,6 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 		edcca_value[0] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
 		edcca_value[1] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL]);
 		edcca_value[2] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL]);
-		edcca_value[3] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]);
 		edcca_compensation = 0;
 		if (tb[MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE])
 			edcca_compensation = nla_get_s8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE]);
@@ -83,7 +82,7 @@ mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	int len = EDCCA_THRES_NUM;
 	int err;
 	u8 edcca_mode;
-	s8 value[EDCCA_THRES_NUM];
+	s8 value[EDCCA_THRES_NUM] = {0};
 
 	if (*storage == 1)
 		return -ENOENT;
