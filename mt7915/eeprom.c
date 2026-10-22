@@ -10,6 +10,12 @@ static bool enable_6ghz;
 module_param(enable_6ghz, bool, 0644);
 MODULE_PARM_DESC(enable_6ghz, "Enable 6 GHz instead of 5 GHz on hardware that supports both");
 
+/* 0: legacy MT7981 cal-free list, 1: report MT7976 list differences only, 2: apply MT7976 list */
+static uint mt7981_calfree_7976;
+module_param(mt7981_calfree_7976, uint, 0444);
+MODULE_PARM_DESC(mt7981_calfree_7976,
+		 "MT7981 cal-free A-die handling: 0=default, 1=report MT7976 efuse differences only, 2=apply MT7976 efuse data");
+
 static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
@@ -282,6 +288,38 @@ void mt7915_eeprom_parse_hw_cap(struct mt7915_dev *dev,
 	dev->chainshift = hweight8(dev->mphy.chainmask);
 }
 
+static int mt7915_eeprom_rebinding(struct mt7915_dev *dev, u16 base,
+				   bool apply)
+{
+#define MT_EE_ADIE1_MT7976C_OFFSET	0x270
+#define MT_EE_ADIE1_E3_OFFSET		0x271
+	static const u16 offs[] = {
+		MT_EE_ADIE1_MT7976C_OFFSET,
+		MT_EE_ADIE1_E3_OFFSET,
+	};
+	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 buf[MT7915_EEPROM_BLOCK_SIZE];
+	int i, ret;
+
+	ret = mt7915_mcu_get_eeprom(dev, buf, offs[0] + base);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(offs); i++) {
+		u8 val = buf[(offs[i] + base) % MT7915_EEPROM_BLOCK_SIZE];
+
+		if (eeprom[offs[i]] != val)
+			dev_info(dev->mt76.dev,
+				 "cal-free: eeprom[0x%03x] flash=0x%02x efuse=0x%02x%s\n",
+				 offs[i], eeprom[offs[i]], val,
+				 apply ? " (applied)" : "");
+		if (apply)
+			eeprom[offs[i]] = val;
+	}
+
+	return 0;
+}
+
 static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 {
 #define MT_EE_CAL_FREE_MAX_SIZE		70
@@ -343,6 +381,7 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 	u8 *eeprom = dev->mt76.eeprom.data;
 	u8 buf[MT7915_EEPROM_BLOCK_SIZE];
 	int adie_id, band, i, ret;
+	bool calfree_report = false, calfree_apply = true;
 
 	switch (mt76_chip(&dev->mt76)) {
 	case 0x7915:
@@ -358,8 +397,15 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 		eep_offs[0] = NULL;
 		break;
 	case 0x7981:
-		adie_offs[0] = adie_offs_list[ADIE_7981];
 		eep_offs[0] = NULL;
+		if (mt7981_calfree_7976) {
+			calfree_report = true;
+			calfree_apply = mt7981_calfree_7976 >= 2;
+			adie_offs[0] = adie_offs_list[ADIE_7976];
+			mt7915_eeprom_rebinding(dev, 0, calfree_apply);
+		} else {
+			adie_offs[0] = adie_offs_list[ADIE_7981];
+		}
 		break;
 	case 0x7906:
 		if (is_mt7916(&dev->mt76))
@@ -440,6 +486,7 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 	for (band = 0; band < __MT_MAX_BAND; band++) {
 		u16 adie_offset, eep_offset;
 		u32 block_num, prev_block_num = -1;
+		u8 val;
 
 		if (!adie_offs[band])
 			continue;
@@ -466,7 +513,14 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 				}
 			}
 
-			eeprom[eep_offset] = buf[adie_offset % MT7915_EEPROM_BLOCK_SIZE];
+			val = buf[adie_offset % MT7915_EEPROM_BLOCK_SIZE];
+			if (calfree_report && eeprom[eep_offset] != val)
+				dev_info(dev->mt76.dev,
+					 "cal-free: eeprom[0x%03x] flash=0x%02x efuse=0x%02x%s\n",
+					 eep_offset, eeprom[eep_offset], val,
+					 calfree_apply ? " (applied)" : "");
+			if (calfree_apply)
+				eeprom[eep_offset] = val;
 			prev_block_num = block_num;
 
 			/* workaround for Harrier */
