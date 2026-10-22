@@ -4420,7 +4420,7 @@ int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compens
 	struct {
 		u8 band_idx;
 		u8 cmd_idx;
-		u8 setting[4];
+		u8 setting[3];
 		bool record_in_fw;
 		u8 region;
 		s8 thres_compensation;
@@ -4443,7 +4443,6 @@ int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compens
 		req.setting[0] = value[0];
 		req.setting[1] = value[1];
 		req.setting[2] = value[2];
-		req.setting[3] = value[3];
 	} else {
 		return -EINVAL;
 	}
@@ -4457,7 +4456,7 @@ int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value)
 	struct {
 		u8 band_idx;
 		u8 cmd_idx;
-		u8 setting[4];
+		u8 setting[3];
 		bool record_in_fw;
 		u8 region;
 		s8 thres_compensation;
@@ -4479,7 +4478,7 @@ int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value)
 	*value++ = res->info[0];
 	*value++ = res->info[1];
 	*value++ = res->info[2];
-	*value = res->info[3];
+	*value = 0;
 	dev_kfree_skb(skb);
 
 	return 0;
