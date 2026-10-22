@@ -16,6 +16,12 @@ module_param(mt7981_calfree_7976, uint, 0444);
 MODULE_PARM_DESC(mt7981_calfree_7976,
 		 "MT7981 cal-free A-die handling: 0=default, 1=report MT7976 efuse differences only, 2=apply MT7976 efuse data");
 
+/* bit0: disable 2 GHz TSSI, bit1: disable 5 GHz TSSI (in-memory EEPROM only, test aid) */
+static uint mt7981_tssi_off;
+module_param(mt7981_tssi_off, uint, 0444);
+MODULE_PARM_DESC(mt7981_tssi_off,
+		 "MT7981 test aid: clear TSSI enable flags in the loaded EEPROM (bit0=2GHz, bit1=5GHz); flash is not modified");
+
 static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
@@ -551,6 +557,20 @@ int mt7915_eeprom_init(struct mt7915_dev *dev)
 	ret = mt7915_apply_cal_free_data(dev);
 	if (ret)
 		return ret;
+
+	if (is_mt7981(&dev->mt76) && mt7981_tssi_off) {
+		u8 *conf = (u8 *)dev->mt76.eeprom.data + MT_EE_WIFI_CONF + 8;
+		u8 old_val = *conf;
+
+		if (mt7981_tssi_off & BIT(0))
+			*conf &= ~MT_EE_WIFI_CONF7_TSSI0_2G;
+		if (mt7981_tssi_off & BIT(1))
+			*conf &= ~(MT_EE_WIFI_CONF7_TSSI0_5G |
+				   MT_EE_WIFI_CONF7_TSSI1_5G);
+		dev_warn(dev->mt76.dev,
+			 "TSSI test: eeprom[0x%03x] 0x%02x -> 0x%02x\n",
+			 MT_EE_WIFI_CONF + 8, old_val, *conf);
+	}
 
 	mt7915_eeprom_parse_hw_cap(dev, &dev->phy);
 	memcpy(dev->mphy.macaddr, dev->mt76.eeprom.data + MT_EE_MAC_ADDR,
