@@ -7,6 +7,16 @@
 #include "mac.h"
 #include "eeprom.h"
 
+static bool mt7981_sku_off;
+module_param(mt7981_sku_off, bool, 0444);
+MODULE_PARM_DESC(mt7981_sku_off,
+		 "MT7981 test aid: tell the firmware to disable TX power limit (SKU) and path backoff tables");
+
+static uint mt7981_rx_path;
+module_param(mt7981_rx_path, uint, 0444);
+MODULE_PARM_DESC(mt7981_rx_path,
+		 "MT7981 test aid: override the band RX path mask (bit0..2 = RX chains; 3 = chains 0,1; 6 = chains 1,2; 0 = default)");
+
 #define fw_name(_dev, name, ...)	({			\
 	char *_fw;						\
 	switch (mt76_chip(&(_dev)->mt76)) {			\
@@ -2892,6 +2902,10 @@ int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd)
 	    !mt76_testmode_enabled(phy->mt76))
 		req.rx_path = GENMASK(2, 0);
 
+	if (is_mt7981(&dev->mt76) && (mt7981_rx_path & GENMASK(2, 0)) &&
+	    !mt76_testmode_enabled(phy->mt76))
+		req.rx_path = mt7981_rx_path & GENMASK(2, 0);
+
 	if (mt76_connac_spe_idx(phy->mt76->antenna_mask))
 		req.tx_path_num = fls(phy->mt76->antenna_mask);
 
@@ -3693,6 +3707,8 @@ int mt7915_mcu_set_sku_en(struct mt7915_phy *phy)
 	int ret;
 
 	req.sku_enable = phy->sku_limit_en;
+	if (is_mt7981(&dev->mt76) && mt7981_sku_off)
+		req.sku_enable = 0;
 	req.format_id = TX_POWER_LIMIT_ENABLE;
 
 	ret = mt76_mcu_send_msg(&dev->mt76,
@@ -3702,6 +3718,8 @@ int mt7915_mcu_set_sku_en(struct mt7915_phy *phy)
 		return ret;
 
 	req.sku_enable = phy->sku_path_en;
+	if (is_mt7981(&dev->mt76) && mt7981_sku_off)
+		req.sku_enable = 0;
 	req.format_id = TX_POWER_LIMIT_PATH_ENABLE;
 
 	return mt76_mcu_send_msg(&dev->mt76,

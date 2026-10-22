@@ -22,6 +22,12 @@ module_param(mt7981_tssi_off, uint, 0444);
 MODULE_PARM_DESC(mt7981_tssi_off,
 		 "MT7981 test aid: clear TSSI enable flags in the loaded EEPROM (bit0=2GHz, bit1=5GHz); flash is not modified");
 
+/* test aid: force all MT7981 5 GHz per-chain target power entries (0.5 dBm units), 0 = off */
+static uint mt7981_tgt_pwr_5g;
+module_param(mt7981_tgt_pwr_5g, uint, 0444);
+MODULE_PARM_DESC(mt7981_tgt_pwr_5g,
+		 "MT7981 test aid: override 5 GHz target power in the loaded EEPROM (0.5 dBm units, e.g. 43 = 21.5 dBm); flash is not modified");
+
 static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
@@ -570,6 +576,17 @@ int mt7915_eeprom_init(struct mt7915_dev *dev)
 		dev_warn(dev->mt76.dev,
 			 "TSSI test: eeprom[0x%03x] 0x%02x -> 0x%02x\n",
 			 MT_EE_WIFI_CONF + 8, old_val, *conf);
+	}
+
+	if (is_mt7981(&dev->mt76) && mt7981_tgt_pwr_5g) {
+		u8 *tgt = (u8 *)dev->mt76.eeprom.data + MT_EE_TX0_POWER_5G_V2;
+		u8 old_val = tgt[0];
+
+		/* 4 chains x 5 channel groups */
+		memset(tgt, min_t(uint, mt7981_tgt_pwr_5g, 0xff), 4 * 5);
+		dev_warn(dev->mt76.dev,
+			 "target power test: 5 GHz chain0 target 0x%02x -> 0x%02x\n",
+			 old_val, tgt[0]);
 	}
 
 	mt7915_eeprom_parse_hw_cap(dev, &dev->phy);
