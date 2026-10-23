@@ -3,6 +3,7 @@
 
 #include <linux/firmware.h>
 #include <linux/moduleparam.h>
+#include <linux/of.h>
 #include "mt7915.h"
 #include "eeprom.h"
 
@@ -15,12 +16,6 @@ static uint mt7981_calfree_7976;
 module_param(mt7981_calfree_7976, uint, 0444);
 MODULE_PARM_DESC(mt7981_calfree_7976,
 		 "MT7981 cal-free A-die handling: 0=default, 1=report MT7976 efuse differences only, 2=apply MT7976 efuse data");
-
-/* bit0: disable 2 GHz TSSI, bit1: disable 5 GHz TSSI (in-memory EEPROM only, test aid) */
-static uint mt7981_tssi_off;
-module_param(mt7981_tssi_off, uint, 0444);
-MODULE_PARM_DESC(mt7981_tssi_off,
-		 "MT7981 test aid: clear TSSI enable flags in the loaded EEPROM (bit0=2GHz, bit1=5GHz); flash is not modified");
 
 /* test aid: force all MT7981 5 GHz per-chain target power entries (0.5 dBm units), 0 = off */
 static uint mt7981_tgt_pwr_5g;
@@ -544,6 +539,37 @@ static int mt7915_apply_cal_free_data(struct mt7915_dev *dev)
 	return 0;
 }
 
+/* Clear the TSSI enable flags of the bands marked with "mediatek,tssi-disable"
+ * in the DT. Only the in-memory EEPROM is changed, the flash is left alone.
+ */
+static void mt7915_eeprom_tssi_disable(struct mt7915_dev *dev)
+{
+	struct device_node *np = dev->mt76.dev->of_node, *band_np;
+	u8 *conf = (u8 *)dev->mt76.eeprom.data + MT_EE_WIFI_CONF + 8;
+	u8 old_val = *conf;
+	u32 reg;
+
+	if (!is_mt7981(&dev->mt76) || !np)
+		return;
+
+	for_each_child_of_node(np, band_np) {
+		if (of_property_read_u32(band_np, "reg", &reg) ||
+		    !of_property_read_bool(band_np, "mediatek,tssi-disable"))
+			continue;
+
+		if (reg == MT_BAND0)
+			*conf &= ~MT_EE_WIFI_CONF7_TSSI0_2G;
+		else if (reg == MT_BAND1)
+			*conf &= ~(MT_EE_WIFI_CONF7_TSSI0_5G |
+				   MT_EE_WIFI_CONF7_TSSI1_5G);
+	}
+
+	if (*conf != old_val)
+		dev_info(dev->mt76.dev,
+			 "TSSI disabled by DT: eeprom[0x%03x] 0x%02x -> 0x%02x\n",
+			 MT_EE_WIFI_CONF + 8, old_val, *conf);
+}
+
 int mt7915_eeprom_init(struct mt7915_dev *dev)
 {
 	int ret;
@@ -564,19 +590,7 @@ int mt7915_eeprom_init(struct mt7915_dev *dev)
 	if (ret)
 		return ret;
 
-	if (is_mt7981(&dev->mt76) && mt7981_tssi_off) {
-		u8 *conf = (u8 *)dev->mt76.eeprom.data + MT_EE_WIFI_CONF + 8;
-		u8 old_val = *conf;
-
-		if (mt7981_tssi_off & BIT(0))
-			*conf &= ~MT_EE_WIFI_CONF7_TSSI0_2G;
-		if (mt7981_tssi_off & BIT(1))
-			*conf &= ~(MT_EE_WIFI_CONF7_TSSI0_5G |
-				   MT_EE_WIFI_CONF7_TSSI1_5G);
-		dev_warn(dev->mt76.dev,
-			 "TSSI test: eeprom[0x%03x] 0x%02x -> 0x%02x\n",
-			 MT_EE_WIFI_CONF + 8, old_val, *conf);
-	}
+	mt7915_eeprom_tssi_disable(dev);
 
 	if (is_mt7981(&dev->mt76) && mt7981_tgt_pwr_5g) {
 		u8 *tgt = (u8 *)dev->mt76.eeprom.data + MT_EE_TX0_POWER_5G_V2;
