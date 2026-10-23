@@ -1128,6 +1128,11 @@ void mt7915_mac_reset_counters(struct mt7915_phy *phy)
 	mt7915_mcu_get_chan_mib_info(phy, true);
 }
 
+uint mt7981_fw_regs;
+module_param(mt7981_fw_regs, uint, 0444);
+MODULE_PARM_DESC(mt7981_fw_regs,
+		 "MT7981 test aid: skip driver MAC register setup and leave it to the firmware (bit0=IFS/timing, bit1=per-band init, bit2=global RX len/de-agg)");
+
 void mt7915_mac_set_timing(struct mt7915_phy *phy)
 {
 	s16 coverage_class = phy->coverage_class;
@@ -1141,41 +1146,44 @@ void mt7915_mac_set_timing(struct mt7915_phy *phy)
 	u8 band = phy->mt76->band_idx;
 	int eifs_ofdm = 84, sifs = 10, offset;
 	bool a_band = !(phy->mt76->chandef.chan->band == NL80211_BAND_2GHZ);
+	bool fw_timing = mt7915_fw_regs(dev, MT7981_FW_REGS_TIMING);
 
 	if (!test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
 		return;
 
-	if (ext_phy)
-		coverage_class = max_t(s16, dev->phy.coverage_class,
-				       ext_phy->coverage_class);
+	if (!fw_timing) {
+		if (ext_phy)
+			coverage_class = max_t(s16, dev->phy.coverage_class,
+					       ext_phy->coverage_class);
 
-	mt76_set(dev, MT_ARB_SCR(band),
-		 MT_ARB_SCR_TX_DISABLE | MT_ARB_SCR_RX_DISABLE);
-	udelay(1);
+		mt76_set(dev, MT_ARB_SCR(band),
+			 MT_ARB_SCR_TX_DISABLE | MT_ARB_SCR_RX_DISABLE);
+		udelay(1);
 
-	offset = 3 * coverage_class;
-	reg_offset = FIELD_PREP(MT_TIMEOUT_VAL_PLCP, offset) |
-		     FIELD_PREP(MT_TIMEOUT_VAL_CCA, offset);
+		offset = 3 * coverage_class;
+		reg_offset = FIELD_PREP(MT_TIMEOUT_VAL_PLCP, offset) |
+			     FIELD_PREP(MT_TIMEOUT_VAL_CCA, offset);
 
-	if (!is_mt7915(&dev->mt76)) {
-		if (!a_band) {
-			mt76_wr(dev, MT_TMAC_ICR1(band),
-				FIELD_PREP(MT_IFS_EIFS_CCK, 314));
-			eifs_ofdm = 78;
-		} else {
-			eifs_ofdm = 84;
+		if (!is_mt7915(&dev->mt76)) {
+			if (!a_band) {
+				mt76_wr(dev, MT_TMAC_ICR1(band),
+					FIELD_PREP(MT_IFS_EIFS_CCK, 314));
+				eifs_ofdm = 78;
+			} else {
+				eifs_ofdm = 84;
+			}
+		} else if (a_band) {
+			sifs = 16;
 		}
-	} else if (a_band) {
-		sifs = 16;
-	}
 
-	mt76_wr(dev, MT_TMAC_CDTR(band), cck + reg_offset);
-	mt76_wr(dev, MT_TMAC_ODTR(band), ofdm + reg_offset);
-	mt76_wr(dev, MT_TMAC_ICR0(band),
-		FIELD_PREP(MT_IFS_EIFS_OFDM, eifs_ofdm) |
-		FIELD_PREP(MT_IFS_RIFS, 2) |
-		FIELD_PREP(MT_IFS_SIFS, sifs) |
-		FIELD_PREP(MT_IFS_SLOT, phy->slottime));
+		mt76_wr(dev, MT_TMAC_CDTR(band), cck + reg_offset);
+		mt76_wr(dev, MT_TMAC_ODTR(band), ofdm + reg_offset);
+		mt76_wr(dev, MT_TMAC_ICR0(band),
+			FIELD_PREP(MT_IFS_EIFS_OFDM, eifs_ofdm) |
+			FIELD_PREP(MT_IFS_RIFS, 2) |
+			FIELD_PREP(MT_IFS_SIFS, sifs) |
+			FIELD_PREP(MT_IFS_SLOT, phy->slottime));
+	}
 
 	if (phy->slottime < 20 || a_band)
 		val = MT7915_CFEND_RATE_DEFAULT;
@@ -1183,8 +1191,9 @@ void mt7915_mac_set_timing(struct mt7915_phy *phy)
 		val = MT7915_CFEND_RATE_11B;
 
 	mt76_rmw_field(dev, MT_AGG_ACR0(band), MT_AGG_ACR_CFEND_RATE, val);
-	mt76_clear(dev, MT_ARB_SCR(band),
-		   MT_ARB_SCR_TX_DISABLE | MT_ARB_SCR_RX_DISABLE);
+	if (!fw_timing)
+		mt76_clear(dev, MT_ARB_SCR(band),
+			   MT_ARB_SCR_TX_DISABLE | MT_ARB_SCR_RX_DISABLE);
 }
 
 void mt7915_mac_enable_nf(struct mt7915_dev *dev, bool band)

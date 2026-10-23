@@ -685,6 +685,18 @@ struct mt7915_mcu_edcca_info {
 	u8 rsv;
 };
 
+extern uint mt7981_fw_regs;
+
+/* MT7981 test aid: leave MAC register setup to the firmware */
+enum {
+	MT7981_FW_REGS_TIMING = BIT(0),
+	MT7981_FW_REGS_BAND = BIT(1),
+	MT7981_FW_REGS_GLOBAL = BIT(2),
+};
+
+#define mt7915_fw_regs(_dev, _flag) \
+	(is_mt7981(&(_dev)->mt76) && (mt7981_fw_regs & (_flag)))
+
 void mt7915_register_vendor(struct mt7915_phy *phy);
 int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compensation);
 int mt7915_mcu_get_edcca(struct mt7915_phy *phy, u8 mode, s8 *value);
