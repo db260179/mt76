@@ -4436,6 +4436,9 @@ int mt7915_mcu_set_edcca(struct mt7915_phy *phy, int mode, u8 *value, s8 compens
 
 	if (mode == EDCCA_CTRL_SET_EN) {
 		req.setting[0] = (!value)? EDCCA_MODE_AUTO: value[0];
+		/* no compensation default when EDCCA is force-disabled */
+		if (req.setting[0] == EDCCA_MODE_FORCE_DISABLE)
+			req.thres_compensation = 0;
 	} else if (mode == EDCCA_CTRL_SET_THERS) {
 		req.setting[0] = value[0];
 		req.setting[1] = value[1];
