@@ -106,6 +106,6 @@ DEFINE_EVENT(dev_txid_evt, mac_txdone,
 #undef TRACE_INCLUDE_PATH
 #define TRACE_INCLUDE_PATH .
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_FILE trace
+#define TRACE_INCLUDE_FILE mt76_trace
 
 #include <trace/define_trace.h>
