@@ -980,7 +980,7 @@ int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
 		       u8 phy_idx)
 {
 	struct mt76_phy *phy = phy_idx < __MT_MAX_BAND ? dev->phys[phy_idx] : NULL;
-	int token;
+	int token, start = 0;
 
 	spin_lock_bh(&dev->token_lock);
 	
@@ -990,10 +990,12 @@ int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
 		return -EINVAL;
 	}
 
-	token = idr_alloc(&dev->token, *ptxwi, dev->token_start,
-			  dev->token_start + dev->token_size,
+	if (mtk_wed_device_active(&dev->mmio.wed))
+		start = dev->mmio.wed.wlan.nbuf;
+
+	token = idr_alloc(&dev->token, *ptxwi, start, start + dev->token_size,
 			  GFP_ATOMIC);
-	if (token >= dev->token_start) {
+	if (token >= start) {
 		dev->token_count++;
 		if (dev->num_phy > 1 && phy) {
 			(*ptxwi)->phy_idx = phy_idx;
@@ -1005,12 +1007,6 @@ int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
 			atomic_inc(&mphy->mgmt_tx_pending);
 		}
 	}
-
-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
-	if (mtk_wed_device_active(&dev->mmio.wed) &&
-	    token >= dev->mmio.wed.wlan.token_start)
-		dev->wed_token_count++;
-#endif
 
 	if (dev->token_count >= dev->token_size - MT76_TOKEN_FREE_THR)
 		__mt76_set_tx_blocked(dev, true);
@@ -1058,12 +1054,6 @@ mt76_token_release(struct mt76_dev *dev, int token, bool *wake)
 				wake_up(&dev->tx_wait);
 		}
 
-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
-		if (mtk_wed_device_active(&dev->mmio.wed) &&
-		    token >= dev->mmio.wed.wlan.token_start &&
-		    --dev->wed_token_count == 0)
-			wake_up(&dev->tx_wait);
-#endif
 	}
 
 	if (wake && dev->token_count < dev->token_size - MT76_TOKEN_FREE_THR &&
