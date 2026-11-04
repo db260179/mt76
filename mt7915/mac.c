@@ -102,11 +102,11 @@ static void mt7915_mac_sta_poll(struct mt7915_dev *dev)
 	LIST_HEAD(sta_poll_list);
 	int i;
 
+	rcu_read_lock();
+
 	spin_lock_bh(&dev->mt76.sta_poll_lock);
 	list_splice_init(&dev->mt76.sta_poll_list, &sta_poll_list);
 	spin_unlock_bh(&dev->mt76.sta_poll_lock);
-
-	rcu_read_lock();
 
 	while (true) {
 		bool clear = false;
